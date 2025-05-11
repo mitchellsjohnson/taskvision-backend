@@ -41,6 +41,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Build and Deploy Backend with SAM
+        id: deploy
         run: |
           echo "Current directory: $(pwd)"
           echo "Listing directory contents:"
@@ -56,4 +57,8 @@ jobs:
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
             ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
-            --debug 
+            --debug || {
+              echo "Deployment failed. Showing stack events:"
+              aws cloudformation describe-stack-events --stack-name taskvision-backend
+              exit 1
+            } 

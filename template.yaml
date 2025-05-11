@@ -58,6 +58,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
+        SSEType: AES256
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
