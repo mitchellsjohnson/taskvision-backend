@@ -10,9 +10,9 @@ Parameters:
       - dev
       - prod
     Description: Environment name for resource naming
+
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
-  TableExists: !Equals [!Ref 'AWS::NoValue', !GetAtt TaskVisionTable, 'TableName']
 
 Resources:
   TaskVisionFunction:
@@ -27,16 +27,10 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          TABLE_NAME: !If 
-            - TableExists
-            - !GetAtt TaskVisionTable.TableName
-            - !Sub 'taskvision-${Environment}-table'
+          TABLE_NAME: !Ref TaskVisionTable
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !If 
-              - TableExists
-              - !GetAtt TaskVisionTable.TableName
-              - !Sub 'taskvision-${Environment}-table'
+            TableName: !Ref TaskVisionTable
       Events:
         ApiEvent:
           Type: Api
@@ -44,10 +38,53 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             RestApiId: !Ref TaskVisionApi
+
+  TaskVisionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'taskvision-${Environment}-api'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  TaskVisionApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref TaskVisionApi
+      StageName: !Ref Environment
+      DeploymentId: !Ref TaskVisionApiDeployment
+
+  TaskVisionApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiEvent
+    Properties:
+      RestApiId: !Ref TaskVisionApi
+
+  TaskVisionTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub 'taskvision-${Environment}-table'
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref TaskVisionTable
   FrontendBucket:
     Description: S3 bucket for frontend hosting
     Value: !Ref S3Bucket
