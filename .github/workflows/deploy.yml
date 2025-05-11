@@ -25,19 +25,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install Backend Dependencies
-        run: |
-          cd taskvision-backend
-          npm install
+        run: npm install
 
       - name: Run Backend Tests
-        run: |
-          cd taskvision-backend
-          npm test
+        run: npm test
 
       - name: Build Backend
-        run: |
-          cd taskvision-backend
-          npm run build
+        run: npm run build
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -48,7 +42,6 @@ jobs:
 
       - name: Build and Deploy Backend with SAM
         run: |
-          cd taskvision-backend
           echo "Building SAM application..."
           npm run sam:build
           echo "Deploying SAM application..."
