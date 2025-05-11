@@ -16,6 +16,11 @@ Conditions:
   TableExists: !Equals [!Ref 'AWS::NoValue', !GetAtt TaskVisionTable, 'TableName']
 
 Resources:
+  TaskVisionApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -42,6 +47,7 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
+            RestApiId: !Ref TaskVisionApi
             Path: /{proxy+}
             Method: ANY
 
@@ -91,7 +97,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
   FrontendBucket:
     Description: S3 bucket for frontend hosting
     Value: !Ref S3Bucket
