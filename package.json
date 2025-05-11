@@ -1,6 +1,6 @@
 {
   "name": "api_express_typescript_hello-world",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Auth0 Express.js API code sample with TypeScript",
   "main": "src/index.ts",
   "scripts": {
