@@ -17,16 +17,25 @@ Conditions:
 
 Resources:
   TaskVisionApi:
-    Type: AWS::Serverless::Api
+    Type: AWS::ApiGateway::RestApi
     Properties:
-      StageName: !Ref Environment
-      Cors:
-        AllowMethods: "'*'"
-        AllowHeaders: "'*'"
-        AllowOrigin: "'*'"
+      Name: !Sub 'taskvision-${Environment}-api'
       EndpointConfiguration:
-        Type: REGIONAL
-      OpenApiVersion: '3.0.1'
+        Types:
+          - REGIONAL
+
+  TaskVisionApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref TaskVisionApi
+      StageName: !Ref Environment
+      DeploymentId: !Ref TaskVisionApiDeployment
+
+  TaskVisionApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiEvent
+    Properties:
+      RestApiId: !Ref TaskVisionApi
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
