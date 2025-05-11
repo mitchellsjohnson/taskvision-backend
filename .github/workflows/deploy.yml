@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy Backend
 
 on:
   push:
@@ -24,20 +24,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install Backend Dependencies
+      - name: Install SAM CLI
         run: |
-          cd taskvision-backend
-          npm install
+          wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
+          unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
+          sudo ./sam-installation/install
+
+      - name: Install Backend Dependencies
+        run: npm install
 
       - name: Run Backend Tests
-        run: |
-          cd taskvision-backend
-          npm test
+        run: npm test
 
       - name: Build Backend
-        run: |
-          cd taskvision-backend
-          npm run build
+        run: npm run build
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -48,7 +48,6 @@ jobs:
 
       - name: Build and Deploy Backend with SAM
         run: |
-          cd taskvision-backend
           echo "Building SAM application..."
           npm run sam:build
           echo "Deploying SAM application..."
