@@ -41,6 +41,9 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref TaskVisionApi
       Tags:
         - Key: Environment
           Value: !Ref Environment
