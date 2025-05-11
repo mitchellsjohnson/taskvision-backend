@@ -3,8 +3,7 @@ name: Deploy Backend
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -14,23 +13,20 @@ env:
   CLIENT_ORIGIN_URL: ${{ secrets.CLIENT_ORIGIN_URL }}
 
 jobs:
-  deploy-backend:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
 
-      - name: Install Backend Dependencies
-        run: npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: Run Backend Tests
-        run: npm test
-
-      - name: Build Backend
+      - name: Build
         run: npm run build
 
       - name: Configure AWS Credentials
@@ -38,45 +34,28 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
 
       - name: Clean up failed stack
         run: |
-          echo "Checking stack status..."
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
-          echo "Stack status: $STACK_STATUS"
-          
-          if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" || "$STACK_STATUS" == "CREATE_FAILED" ]]; then
-            echo "Found failed stack, deleting..."
+          if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" || "$STACK_STATUS" == "CREATE_FAILED" || "$STACK_STATUS" == "ROLLBACK_FAILED" || "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+            echo "Stack is in a failed state. Deleting..."
             aws cloudformation delete-stack --stack-name taskvision-backend
             echo "Waiting for stack deletion to complete..."
             aws cloudformation wait stack-delete-complete --stack-name taskvision-backend
           elif [[ "$STACK_STATUS" == "STACK_NOT_FOUND" ]]; then
-            echo "No existing stack found, proceeding with deployment..."
+            echo "Stack does not exist. Proceeding with deployment."
           else
-            echo "Stack exists and is in a valid state ($STACK_STATUS), proceeding with update..."
+            echo "Stack is in a valid state. Proceeding with deployment."
           fi
 
-      - name: Build and Deploy Backend with SAM
-        id: deploy
+      - name: SAM Deploy
         run: |
-          echo "Current directory: $(pwd)"
-          echo "Listing directory contents:"
-          ls -la
-          echo "Building SAM application..."
-          sam build
-          echo "Deploying SAM application..."
-          sam deploy --no-fail-on-empty-changeset \
+          sam deploy \
             --stack-name taskvision-backend \
-            --resolve-s3 \
+            --template-file .aws-sam/build/template.yaml \
             --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset \
             --parameter-overrides \
-            Environment=prod \
-            Auth0Domain=${{ env.AUTH0_DOMAIN }} \
-            Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
-            ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
-            --debug || {
-              echo "Deployment failed. Showing stack events:"
-              aws cloudformation describe-stack-events --stack-name taskvision-backend
-              exit 1
-            } 
+              Environment=prod 

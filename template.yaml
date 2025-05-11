@@ -1,116 +1,100 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaskVision Backend API
+Description: Backend API for TaskVision
+
 Parameters:
   Environment:
     Type: String
-    Default: prod
+    Default: dev
     AllowedValues:
       - dev
-      - staging
       - prod
-    Description: Environment name (dev, staging, prod)
-Globals:
-  Function:
-    Timeout: 30
-    MemorySize: 256
-    Runtime: nodejs18.x
-    Environment:
-      Variables:
-        NODE_ENV: production
-        CLIENT_ORIGIN_URL:
-          Fn::Sub: https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com
+    Description: Environment name for resource naming
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+  TableExists: !Equals [!Ref 'AWS::NoValue', !GetAtt TaskVisionTable, 'TableName']
+
 Resources:
-  TaskVisionApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: 
-        Fn::Sub: ${Environment}
-      Cors:
-        AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
-        AllowHeaders: '''Content-Type,Authorization'''
-        AllowOrigin:
-          Fn::Sub: '''https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'''
-        MaxAge: '''600'''
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .
+      CodeUri: ./
       Handler: src/lambda.handler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          TABLE_NAME: !If 
+            - TableExists
+            - !GetAtt TaskVisionTable.TableName
+            - !Sub 'taskvision-${Environment}-table'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !If 
+              - TableExists
+              - !GetAtt TaskVisionTable.TableName
+              - !Sub 'taskvision-${Environment}-table'
       Events:
         ApiEvent:
           Type: Api
           Properties:
-            RestApiId:
-              Ref: TaskVisionApi
             Path: /{proxy+}
             Method: ANY
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Fn::Sub: taskvision-${Environment}-table
-      Environment:
-        Variables:
-          TABLE_NAME:
-            Fn::Sub: taskvision-${Environment}-table
+
   TaskVisionTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TableName:
-        Fn::Sub: taskvision-${Environment}-table
+      TableName: !Sub 'taskvision-${Environment}-table'
       BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-      - AttributeName: id
-        AttributeType: S
-      KeySchema:
-      - AttributeName: id
-        KeyType: HASH
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName:
-        Fn::Sub: taskvision-${Environment}-frontend-${AWS::Region}
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
+      BucketName: !Sub 'taskvision-${Environment}-frontend-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
   S3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket:
-        Ref: S3Bucket
+      Bucket: !Ref S3Bucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Principal: '*'
-          Action: s3:GetObject
-          Resource:
-            Fn::Sub: arn:aws:s3:::${S3Bucket}/*
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value:
-      Fn::Sub: https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
   FrontendBucket:
     Description: S3 bucket for frontend hosting
-    Value:
-      Ref: S3Bucket
+    Value: !Ref S3Bucket
   FrontendWebsiteURL:
-    Description: Frontend website URL
-    Value:
-      Fn::Sub: http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com
-  TableName:
-    Description: DynamoDB table name
-    Value:
-      Fn::Sub: taskvision-${Environment}-table 
+    Description: URL of the frontend website
+    Value: !Sub 'http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com' 
