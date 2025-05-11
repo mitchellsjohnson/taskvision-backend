@@ -20,6 +20,13 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      EndpointConfiguration:
+        Type: REGIONAL
+      OpenApiVersion: '3.0.1'
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
