@@ -1,0 +1,103 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '18'
+  AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
+  AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
+  CLIENT_ORIGIN_URL: ${{ secrets.CLIENT_ORIGIN_URL }}
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: taskvision-backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd taskvision-backend
+          npm ci
+
+      - name: Run Backend Tests
+        run: |
+          cd taskvision-backend
+          npm test
+
+      - name: Build Backend
+        run: |
+          cd taskvision-backend
+          npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and Deploy Backend with SAM
+        run: |
+          cd taskvision-backend
+          npm run sam:build
+          sam deploy --no-fail-on-empty-changeset \
+            --parameter-overrides \
+            Auth0Domain=${{ env.AUTH0_DOMAIN }} \
+            Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
+            ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }}
+
+  deploy-frontend:
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: taskvision-frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd taskvision-frontend
+          npm ci
+
+      - name: Run Frontend Tests
+        run: |
+          cd taskvision-frontend
+          npm test
+
+      - name: Build Frontend
+        run: |
+          cd taskvision-frontend
+          npm run build
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Frontend to S3
+        run: |
+          aws s3 sync taskvision-frontend/build/ s3://${{ secrets.S3_BUCKET }} --delete
+
+      - name: Invalidate CloudFront Cache
+        if: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*" 
