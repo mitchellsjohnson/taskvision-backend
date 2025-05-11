@@ -10,7 +10,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "sam:build": "tsc && sam build --template-file .aws-sam/build/template.yaml",
+    "sam:build": "tsc && sam build",
     "sam:deploy": "sam deploy --guided",
     "sam:local": "sam local start-api"
   },

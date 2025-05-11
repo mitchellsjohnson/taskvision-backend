@@ -43,7 +43,7 @@ jobs:
       - name: Build and Deploy Backend with SAM
         run: |
           echo "Building SAM application..."
-          npm run sam:build
+          sam build --template-file template.yaml
           echo "Deploying SAM application..."
           sam deploy --no-fail-on-empty-changeset \
             --template-file template.yaml \
