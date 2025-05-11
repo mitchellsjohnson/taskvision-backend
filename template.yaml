@@ -84,10 +84,6 @@ Resources:
           Action: s3:GetObject
           Resource:
             Fn::Sub: arn:aws:s3:::${S3Bucket}/*
-Parameters:
-  DomainName:
-    Type: String
-    Description: Domain name for the application
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
