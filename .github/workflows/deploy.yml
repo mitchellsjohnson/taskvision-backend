@@ -16,9 +16,6 @@ env:
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v3
 
@@ -39,7 +36,8 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Clean up failed stack
@@ -74,7 +72,6 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
             Environment=prod \
-            CreateTable=false \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
             ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
