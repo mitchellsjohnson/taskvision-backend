@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TaskVision Backend API
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        NODE_ENV: production
+        CLIENT_ORIGIN_URL:
+          Fn::Sub: https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com
+Resources:
+  TaskVisionApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+        AllowHeaders: '''Content-Type,Authorization'''
+        AllowOrigin:
+          Fn::Sub: '''https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'''
+        MaxAge: '''600'''
+  TaskVisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src/lambda.handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TaskVisionApi
+            Path: /{proxy+}
+            Method: ANY
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TaskVisionTable
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: TaskVisionTable
+  TaskVisionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: TaskVisionTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: id
+        KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-frontend-${AWS::Region}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal: '*'
+          Action: s3:GetObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::${S3Bucket}/*
+Parameters:
+  DomainName:
+    Type: String
+    Description: Domain name for the application
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/
+  FrontendBucket:
+    Description: S3 bucket for frontend hosting
+    Value:
+      Ref: S3Bucket
+  FrontendWebsiteURL:
+    Description: Frontend website URL
+    Value:
+      Fn::Sub: http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com
+  TableName:
+    Description: DynamoDB table name
+    Value:
+      Ref: TaskVisionTable 

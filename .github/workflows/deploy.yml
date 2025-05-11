@@ -42,11 +42,13 @@ jobs:
 
       - name: Build and Deploy Backend with SAM
         run: |
+          echo "Current directory: $(pwd)"
+          echo "Listing directory contents:"
+          ls -la
           echo "Building SAM application..."
-          sam build --template-file template.yaml
+          sam build
           echo "Deploying SAM application..."
           sam deploy --no-fail-on-empty-changeset \
-            --template-file template.yaml \
             --parameter-overrides \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \

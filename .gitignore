@@ -10,6 +10,9 @@ node_modules/
 /build
 /dist
 
+# AWS SAM
+.aws-sam/
+
 # Misc
 .DS_Store
 .env.*
