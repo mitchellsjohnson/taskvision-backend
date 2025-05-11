@@ -18,7 +18,7 @@ if (!(process.env.PORT && process.env.CLIENT_ORIGIN_URL)) {
 const PORT = parseInt(process.env.PORT, 10);
 const CLIENT_ORIGIN_URL = process.env.CLIENT_ORIGIN_URL;
 
-const app = express();
+export const app = express();
 const apiRouter = express.Router();
 
 app.use(express.json());
@@ -63,6 +63,8 @@ apiRouter.use("/messages", messagesRouter);
 app.use(errorHandler);
 app.use(notFoundHandler);
 
-app.listen(PORT, () => {
-  console.log(`Listening on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Listening on port ${PORT}`);
+  });
+}
