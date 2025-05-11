@@ -10,33 +10,15 @@ Parameters:
       - dev
       - prod
     Description: Environment name for resource naming
+  CertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for the custom domain
 
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
   TableExists: !Equals [!Ref 'AWS::NoValue', !GetAtt TaskVisionTable, 'TableName']
 
 Resources:
-  TaskVisionApi:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: !Sub 'taskvision-${Environment}-api'
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
-  TaskVisionApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref TaskVisionApi
-      StageName: !Ref Environment
-      DeploymentId: !Ref TaskVisionApiDeployment
-
-  TaskVisionApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiEvent
-    Properties:
-      RestApiId: !Ref TaskVisionApi
-
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -61,10 +43,33 @@ Resources:
               - !Sub 'taskvision-${Environment}-table'
       Events:
         ApiEvent:
-          Type: HttpApi
+          Type: Api
           Properties:
             Path: /{proxy+}
             Method: ANY
+            RestApiId: !Ref TaskVisionApi
+            DomainName: !Sub '${Environment}.execute-api.${AWS::Region}.amazonaws.com'
+
+  TaskVisionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'taskvision-${Environment}-api'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  TaskVisionApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref TaskVisionApi
+      StageName: !Ref Environment
+      DeploymentId: !Ref TaskVisionApiDeployment
+
+  TaskVisionApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiEvent
+    Properties:
+      RestApiId: !Ref TaskVisionApi
 
   TaskVisionTable:
     Type: AWS::DynamoDB::Table
@@ -112,7 +117,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
+    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
   FrontendBucket:
     Description: S3 bucket for frontend hosting
     Value: !Ref S3Bucket
