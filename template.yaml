@@ -10,10 +10,6 @@ Parameters:
       - dev
       - prod
     Description: Environment name for resource naming
-  CertificateArn:
-    Type: String
-    Description: ARN of the ACM certificate for the custom domain
-
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
   TableExists: !Equals [!Ref 'AWS::NoValue', !GetAtt TaskVisionTable, 'TableName']
@@ -48,72 +44,6 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             RestApiId: !Ref TaskVisionApi
-            DomainName: !Sub '${Environment}.execute-api.${AWS::Region}.amazonaws.com'
-
-  TaskVisionApi:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: !Sub 'taskvision-${Environment}-api'
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-
-  TaskVisionApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref TaskVisionApi
-      StageName: !Ref Environment
-      DeploymentId: !Ref TaskVisionApiDeployment
-
-  TaskVisionApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiEvent
-    Properties:
-      RestApiId: !Ref TaskVisionApi
-
-  TaskVisionTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      TableName: !Sub 'taskvision-${Environment}-table'
-      BillingMode: PAY_PER_REQUEST
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-
-  S3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'taskvision-${Environment}-frontend-${AWS::Region}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
-
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
-
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
@@ -123,4 +53,5 @@ Outputs:
     Value: !Ref S3Bucket
   FrontendWebsiteURL:
     Description: URL of the frontend website
-    Value: !Sub 'http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com' 
+    Value: !Sub 'http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
+    

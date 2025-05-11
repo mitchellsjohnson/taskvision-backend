@@ -59,4 +59,5 @@ jobs:
             --no-fail-on-empty-changeset \
             --resolve-s3 \
             --parameter-overrides \
-              Environment=prod 
+              Environment=prod \
+              DomainName=prod.execute-api.us-east-1.amazonaws.com 
