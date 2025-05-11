@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  NODE_VERSION: '18'
+  NODE_VERSION: '16.13.0'
   AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
   AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
   CLIENT_ORIGIN_URL: ${{ secrets.CLIENT_ORIGIN_URL }}
@@ -27,7 +27,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Backend Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run Backend Tests
         run: npm test
