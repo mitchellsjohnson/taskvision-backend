@@ -16,6 +16,9 @@ env:
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v3
 
@@ -36,18 +39,24 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Clean up failed stack
         run: |
-          echo "Checking for failed stack..."
-          if aws cloudformation describe-stacks --stack-name taskvision-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -q "ROLLBACK_COMPLETE"; then
+          echo "Checking stack status..."
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
+          echo "Stack status: $STACK_STATUS"
+          
+          if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" || "$STACK_STATUS" == "CREATE_FAILED" ]]; then
             echo "Found failed stack, deleting..."
             aws cloudformation delete-stack --stack-name taskvision-backend
             echo "Waiting for stack deletion to complete..."
             aws cloudformation wait stack-delete-complete --stack-name taskvision-backend
+          elif [[ "$STACK_STATUS" == "STACK_NOT_FOUND" ]]; then
+            echo "No existing stack found, proceeding with deployment..."
+          else
+            echo "Stack exists and is in a valid state ($STACK_STATUS), proceeding with update..."
           fi
 
       - name: Build and Deploy Backend with SAM
@@ -65,6 +74,7 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
             Environment=prod \
+            CreateTable=false \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
             ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
