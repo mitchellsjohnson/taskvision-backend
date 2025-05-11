@@ -43,51 +43,12 @@ jobs:
       - name: Build and Deploy Backend with SAM
         run: |
           echo "Building SAM application..."
-          npm run sam:build -- --template-file ../template.yaml
+          npm run sam:build
           echo "Deploying SAM application..."
           sam deploy --no-fail-on-empty-changeset \
-            --template-file ../template.yaml \
+            --template-file template.yaml \
             --parameter-overrides \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
             ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
-            --debug
-
-  deploy-frontend:
-    needs: deploy-backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: taskvision-frontend/package-lock.json
-
-      - name: Install Frontend Dependencies
-        run: |
-          cd taskvision-frontend
-          npm ci
-
-      - name: Run Frontend Tests
-        run: |
-          cd taskvision-frontend
-          npm test
-
-      - name: Build Frontend
-        run: |
-          cd taskvision-frontend
-          npm run build
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Deploy Frontend to S3
-        run: |
-          aws s3 sync taskvision-frontend/build/ s3://${{ secrets.S3_BUCKET }} --delete 
+            --debug 
