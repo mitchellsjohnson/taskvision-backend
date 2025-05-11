@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  NODE_VERSION: '16.13.0'
+  NODE_VERSION: '18'
   AUTH0_DOMAIN: ${{ secrets.AUTH0_DOMAIN }}
   AUTH0_AUDIENCE: ${{ secrets.AUTH0_AUDIENCE }}
   CLIENT_ORIGIN_URL: ${{ secrets.CLIENT_ORIGIN_URL }}
@@ -27,13 +27,19 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Backend Dependencies
-        run: npm install
+        run: |
+          cd taskvision-backend
+          npm install
 
       - name: Run Backend Tests
-        run: npm test
+        run: |
+          cd taskvision-backend
+          npm test
 
       - name: Build Backend
-        run: npm run build
+        run: |
+          cd taskvision-backend
+          npm run build
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -44,6 +50,7 @@ jobs:
 
       - name: Build and Deploy Backend with SAM
         run: |
+          cd taskvision-backend
           echo "Building SAM application..."
           npm run sam:build
           echo "Deploying SAM application..."
