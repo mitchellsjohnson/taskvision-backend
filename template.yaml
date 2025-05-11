@@ -61,9 +61,8 @@ Resources:
               - !Sub 'taskvision-${Environment}-table'
       Events:
         ApiEvent:
-          Type: Api
+          Type: HttpApi
           Properties:
-            RestApiId: !Ref TaskVisionApi
             Path: /{proxy+}
             Method: ANY
 
@@ -113,7 +112,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/'
   FrontendBucket:
     Description: S3 bucket for frontend hosting
     Value: !Ref S3Bucket
