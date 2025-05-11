@@ -54,6 +54,7 @@ jobs:
             --resolve-s3 \
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
+            Environment=prod \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
             ClientOriginUrl=${{ env.CLIENT_ORIGIN_URL }} \
