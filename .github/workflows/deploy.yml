@@ -40,6 +40,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Clean up failed stack
+        run: |
+          echo "Checking for failed stack..."
+          if aws cloudformation describe-stacks --stack-name taskvision-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null | grep -q "ROLLBACK_COMPLETE"; then
+            echo "Found failed stack, deleting..."
+            aws cloudformation delete-stack --stack-name taskvision-backend
+            echo "Waiting for stack deletion to complete..."
+            aws cloudformation wait stack-delete-complete --stack-name taskvision-backend
+          fi
+
       - name: Build and Deploy Backend with SAM
         id: deploy
         run: |
