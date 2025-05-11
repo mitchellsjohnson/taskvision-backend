@@ -49,6 +49,7 @@ jobs:
           sam build
           echo "Deploying SAM application..."
           sam deploy --no-fail-on-empty-changeset \
+            --stack-name taskvision-backend \
             --parameter-overrides \
             Auth0Domain=${{ env.AUTH0_DOMAIN }} \
             Auth0Audience=${{ env.AUTH0_AUDIENCE }} \
