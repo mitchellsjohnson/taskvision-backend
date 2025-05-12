@@ -60,4 +60,5 @@ jobs:
             --resolve-s3 \
             --parameter-overrides \
               Environment=prod \
-              DomainName=prod.execute-api.us-east-1.amazonaws.com 
+              DomainName=prod.execute-api.us-east-1.amazonaws.com \
+              ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} 
