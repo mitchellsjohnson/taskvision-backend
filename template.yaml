@@ -38,6 +38,9 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             RestApiId: !Ref TaskVisionApi
+      Tags:
+        Environment: !Ref Environment
+        Project: TaskVision
 
   TaskVisionApi:
     Type: AWS::ApiGateway::RestApi
@@ -46,6 +49,9 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
+      Tags:
+        Environment: !Ref Environment
+        Project: TaskVision
 
   TaskVisionApiStage:
     Type: AWS::ApiGateway::Stage
@@ -77,6 +83,11 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: TaskVision
 
 Outputs:
   ApiEndpoint:
