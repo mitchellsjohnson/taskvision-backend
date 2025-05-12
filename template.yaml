@@ -56,7 +56,7 @@ Resources:
 
   TaskVisionApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiEvent
+    DependsOn: TaskVisionFunction
     Properties:
       RestApiId: !Ref TaskVisionApi
 
@@ -85,10 +85,4 @@ Outputs:
   TableName:
     Description: DynamoDB table name
     Value: !Ref TaskVisionTable
-  FrontendBucket:
-    Description: S3 bucket for frontend hosting
-    Value: !Ref S3Bucket
-  FrontendWebsiteURL:
-    Description: URL of the frontend website
-    Value: !Sub 'http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
     
