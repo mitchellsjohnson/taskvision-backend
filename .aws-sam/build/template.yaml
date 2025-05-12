@@ -44,14 +44,6 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             RestApiId: !Ref TaskVisionApi
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-            Path: /{proxy+}
-            Method: ANY
-            RestApiId: !Ref TaskVisionApi
 
   TaskVisionApi:
     Type: AWS::ApiGateway::RestApi
@@ -61,7 +53,6 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: TaskVision
-      Name: !Sub 'taskvision-${Environment}-api'
       Name: !Sub 'taskvision-${Environment}-api'
       EndpointConfiguration:
         Types:
@@ -75,21 +66,18 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: TaskVision
-      RestApiId: !Ref TaskVisionApi
-      StageName: !Ref Environment
       StageName: !Ref Environment
       DeploymentId: !Ref TaskVisionApiDeployment
 
   TaskVisionApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiEvent
+    DependsOn: TaskVisionFunction
     Properties:
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
           Value: TaskVision
-      RestApiId: !Ref TaskVisionApi
 
   TaskVisionTable:
     Type: AWS::DynamoDB::Table
