@@ -45,19 +45,19 @@ Resources:
             Path: /{proxy+}
             Method: ANY
             RestApiId: !Ref TaskVisionApi
+      Tags:
+        Environment: !Ref Environment
+        Project: TaskVision
 
   TaskVisionApi:
     Type: AWS::ApiGateway::RestApi
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      Name: !Sub 'taskvision-${Environment}-api'
+      Name: !Sub ${AWS::StackName}-api
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Tags:
-        Environment: !Ref Environment
-        Project: TaskVision
 
   TaskVisionApiStage:
     Type: AWS::ApiGateway::Stage

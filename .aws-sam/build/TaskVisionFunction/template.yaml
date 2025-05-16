@@ -1,104 +1,100 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+Description: Backend API for TaskVision
 
-Description: TaskVision Backend API
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name for resource naming
+  ClientOriginUrl:
+    Type: String
+    Default: '*'
+    Description: Allowed CORS origin URL
 
-Globals:
-  Function:
-    Timeout: 30
-    MemorySize: 256
-    Runtime: nodejs18.x
-    Environment:
-      Variables:
-        NODE_ENV: production
-        CLIENT_ORIGIN_URL: !Sub 'https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
 
 Resources:
-  TaskVisionApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: prod
-      Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: !Sub "'https://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'"
-        MaxAge: "'600'"
-
   TaskVisionFunction:
     Type: AWS::Serverless::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       CodeUri: ./
       Handler: src/lambda.handler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          TABLE_NAME: !Sub 'taskvision-${Environment}-table'
+          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Sub 'taskvision-${Environment}-table'
       Events:
         ApiEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref TaskVisionApi
             Path: /{proxy+}
             Method: ANY
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TaskVisionTable
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref TaskVisionTable
+            RestApiId: !Ref TaskVisionApi
+      Tags:
+        Environment: !Ref Environment
+        Project: TaskVision
 
-  TaskVisionTable:
-    Type: AWS::DynamoDB::Table
+  TaskVisionApi:
+    Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      TableName: TaskVisionTable
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
+      Name: !Sub ${AWS::StackName}-api
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
 
-  S3Bucket:
-    Type: AWS::S3::Bucket
+  TaskVisionApiStage:
+    Type: AWS::ApiGateway::Stage
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-frontend-${AWS::Region}'
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
+      RestApiId: !Ref TaskVisionApi
+      StageName: !Ref Environment
+      DeploymentId: !Ref TaskVisionApiDeployment
 
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
+  TaskVisionApiMethod:
+    Type: AWS::ApiGateway::Method
     Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+      RestApiId: !Ref TaskVisionApi
+      ResourceId: !GetAtt TaskVisionApi.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaskVisionFunction.Arn}/invocations'
 
-Parameters:
-  DomainName:
-    Type: String
-    Description: Domain name for the application
+  TaskVisionApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    DependsOn: 
+      - TaskVisionFunction
+      - TaskVisionApiMethod
+    Properties:
+      RestApiId: !Ref TaskVisionApi
 
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/prod/'
-  FrontendBucket:
-    Description: S3 bucket for frontend hosting
-    Value: !Ref S3Bucket
-  FrontendWebsiteURL:
-    Description: Frontend website URL
-    Value: !Sub 'http://${S3Bucket}.s3-website-${AWS::Region}.amazonaws.com'
+    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
   TableName:
     Description: DynamoDB table name
-    Value: !Ref TaskVisionTable 
+    Value: !Sub 'taskvision-${Environment}-table'
+    

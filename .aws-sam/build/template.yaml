@@ -1,117 +1,113 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Backend API for TaskVision
-
 Parameters:
   Environment:
     Type: String
     Default: dev
     AllowedValues:
-      - dev
-      - prod
+    - dev
+    - prod
     Description: Environment name for resource naming
-
+  ClientOriginUrl:
+    Type: String
+    Default: '*'
+    Description: Allowed CORS origin URL
 Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
-
+  IsProd:
+    Fn::Equals:
+    - Ref: Environment
+    - prod
 Resources:
   TaskVisionFunction:
     Type: AWS::Serverless::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-      CodeUri: ./
-      FunctionName: !Sub 'taskvision-${Environment}-function'
+      CodeUri: TaskVisionFunction
       Handler: src/lambda.handler
       Runtime: nodejs18.x
       Architectures:
-        - x86_64
+      - x86_64
       MemorySize: 128
       Timeout: 30
       Environment:
         Variables:
-          TABLE_NAME: !Ref TaskVisionTable
+          TABLE_NAME:
+            Fn::Sub: taskvision-${Environment}-table
+          CLIENT_ORIGIN_URL:
+            Ref: ClientOriginUrl
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TaskVisionTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Fn::Sub: taskvision-${Environment}-table
       Events:
         ApiEvent:
           Type: Api
           Properties:
             Path: /{proxy+}
             Method: ANY
-            RestApiId: !Ref TaskVisionApi
-
+            RestApiId:
+              Ref: TaskVisionApi
+      Tags:
+        Environment:
+          Ref: Environment
+        Project: TaskVision
+    Metadata:
+      SamResourceId: TaskVisionFunction
   TaskVisionApi:
     Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-      Name: !Sub 'taskvision-${Environment}-api'
+      Name:
+        Fn::Sub: ${AWS::StackName}-api
       EndpointConfiguration:
         Types:
-          - REGIONAL
-
+        - REGIONAL
   TaskVisionApiStage:
     Type: AWS::ApiGateway::Stage
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-      StageName: !Ref Environment
-      DeploymentId: !Ref TaskVisionApiDeployment
-
+      RestApiId:
+        Ref: TaskVisionApi
+      StageName:
+        Ref: Environment
+      DeploymentId:
+        Ref: TaskVisionApiDeployment
+  TaskVisionApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: TaskVisionApi
+      ResourceId:
+        Fn::GetAtt:
+        - TaskVisionApi
+        - RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaskVisionFunction.Arn}/invocations
   TaskVisionApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: TaskVisionFunction
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    DependsOn:
+    - TaskVisionFunction
+    - TaskVisionApiMethod
     Properties:
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-
-  TaskVisionTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: TaskVision
-      TableName: !Sub 'taskvision-${Environment}-table'
-      BillingMode: PAY_PER_REQUEST
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      Tags:
-        - Key: ManagedBy
-          Value: SAM
-        - Key: Environment
-          Value: !Ref Environment
-
+      RestApiId:
+        Ref: TaskVisionApi
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Value:
+      Fn::Sub: https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
   TableName:
     Description: DynamoDB table name
-    Value: !Ref TaskVisionTable
-
+    Value:
+      Fn::Sub: taskvision-${Environment}-table
