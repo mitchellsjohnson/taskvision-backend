@@ -3,11 +3,12 @@ import * as dotenv from "dotenv";
 import express from "express";
 import helmet from "helmet";
 import nocache from "nocache";
+import fs from 'fs';
+import './loadEnv'; 
 import { messagesRouter } from "./messages/messages.router";
 import { errorHandler } from "./middleware/error.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 
-dotenv.config();
 
 if (!(process.env.PORT && process.env.CLIENT_ORIGIN_URL)) {
   throw new Error(
