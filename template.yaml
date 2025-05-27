@@ -42,7 +42,7 @@ Resources:
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .aws-sam/build/TaskVisionFunction
+      CodeUri: .
       Handler: lambda.handler
       Runtime: nodejs18.x
       Architectures: [x86_64]
