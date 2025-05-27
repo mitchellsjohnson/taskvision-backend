@@ -1,5 +1,6 @@
 name: Deploy Backend (Dev)
 
+# Trigger on push to main/dev branches or manual dispatch
 on:
   push:
     branches: [main, dev]
