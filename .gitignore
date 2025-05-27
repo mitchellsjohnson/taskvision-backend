@@ -42,3 +42,12 @@ yarn-error.log*
 *.tfvars
 .terraformrc
 terraform.rc 
+
+
+samconfig.toml
+samconfig.*.toml
+.samconfig.dev.toml
+.samconfig.prod.toml
+
+# SAM local env config
+env.json

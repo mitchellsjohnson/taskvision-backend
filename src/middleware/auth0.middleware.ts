@@ -1,34 +1,36 @@
-import * as dotenv from "dotenv";
-import { NextFunction, Request, Response } from "express";
-import {
-  auth,
-  claimCheck,
-  InsufficientScopeError,
-} from "express-oauth2-jwt-bearer";
+// auth0.middleware.ts
 
-dotenv.config();
+import { auth } from 'express-oauth2-jwt-bearer';
+import { Request, Response, NextFunction } from 'express';
 
-export const validateAccessToken = auth({
-  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
-  audience: process.env.AUTH0_AUDIENCE,
-});
-
-export const checkRequiredPermissions = (requiredPermissions: string[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const permissionCheck = claimCheck((payload) => {
-      const permissions = payload.permissions as string[];
-
-      const hasPermissions = requiredPermissions.every((requiredPermission) =>
-        permissions.includes(requiredPermission)
-      );
-
-      if (!hasPermissions) {
-        throw new InsufficientScopeError();
+// JWT validation middleware (can be bypassed for local)
+const jwtCheck =
+  process.env.DISABLE_AUTH === 'true'
+    ? (req: Request, res: Response, next: NextFunction) => {
+        console.warn('[Auth Bypassed] DISABLE_AUTH=true');
+        next();
       }
+    : auth({
+        issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL,
+        audience: process.env.AUTH0_AUDIENCE,
+        tokenSigningAlg: 'RS256'
+      });
 
-      return hasPermissions;
-    });
+// Permission checker middleware (stub, accepts permission array)
+const checkRequiredPermissions =
+  (permissions: string[]) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.DISABLE_AUTH === 'true') {
+      console.warn('[Permission Bypassed] DISABLE_AUTH=true');
+      return next();
+    }
 
-    permissionCheck(req, res, next);
+    // TODO: Check actual user claims against `permissions` array
+    console.log('[Permissions Required]:', permissions);
+    next();
   };
-};
+
+// Optional alias
+const validateAccessToken = jwtCheck;
+
+export { jwtCheck, validateAccessToken, checkRequiredPermissions };

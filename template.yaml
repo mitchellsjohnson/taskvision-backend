@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Backend API for TaskVision
+Description: Backend API for TaskVision with custom domain and Route 53 support
 
 Parameters:
   Environment:
@@ -10,91 +10,95 @@ Parameters:
       - dev
       - prod
     Description: Environment name for resource naming
+
   ClientOriginUrl:
     Type: String
     Default: '*'
     Description: Allowed CORS origin URL
 
+  TableName:
+    Type: String
+    Description: Name of an existing DynamoDB table
+
+  CustomDomainName:
+    Type: String
+    Default: dev-api.taskvision.ai
+    Description: Custom domain for API Gateway
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID for domain validation
+
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
 
 Resources:
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
     Properties:
-      CodeUri: ./
-      Handler: src/lambda.handler
+      CodeUri: .aws-sam/build/TaskVisionFunction
+      Handler: lambda.handler
       Runtime: nodejs18.x
-      Architectures:
-        - x86_64
+      Architectures: [x86_64]
       MemorySize: 128
       Timeout: 30
       Environment:
         Variables:
-          TABLE_NAME: !Sub 'taskvision-${Environment}-table'
+          TABLE_NAME: !Ref TableName
           CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Sub 'taskvision-${Environment}-table'
+            TableName: !Ref TableName
       Events:
         ApiEvent:
           Type: Api
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /{proxy+}
             Method: ANY
-            RestApiId: !Ref TaskVisionApi
-      Tags:
-        Environment: !Ref Environment
-        Project: TaskVision
 
-  TaskVisionApi:
-    Type: AWS::ApiGateway::RestApi
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
     Properties:
-      Name: !Sub ${AWS::StackName}-api
+      DomainName: !Ref CustomDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref CustomDomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref CustomDomainName
+      RegionalCertificateArn: !Ref Certificate
       EndpointConfiguration:
-        Types:
-          - REGIONAL
+        Types: [REGIONAL]
 
-  TaskVisionApiStage:
-    Type: AWS::ApiGateway::Stage
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  BasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
     Properties:
-      RestApiId: !Ref TaskVisionApi
-      StageName: !Ref Environment
-      DeploymentId: !Ref TaskVisionApiDeployment
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref ApiGateway
+      Stage: Prod
 
-  TaskVisionApiMethod:
-    Type: AWS::ApiGateway::Method
+  Route53Record:
+    Type: AWS::Route53::RecordSet
     Properties:
-      RestApiId: !Ref TaskVisionApi
-      ResourceId: !GetAtt TaskVisionApi.RootResourceId
-      HttpMethod: ANY
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaskVisionFunction.Arn}/invocations'
-
-  TaskVisionApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    DependsOn: 
-      - TaskVisionFunction
-      - TaskVisionApiMethod
-    Properties:
-      RestApiId: !Ref TaskVisionApi
+      HostedZoneName: taskvision.ai.
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
 
 Outputs:
-  ApiEndpoint:
-    Description: API Gateway endpoint URL
-    Value: !Sub 'https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
-  TableName:
-    Description: DynamoDB table name
-    Value: !Sub 'taskvision-${Environment}-table'
-    
+  ApiUrl:
+    Description: "Deployed API Gateway custom domain"
+    Value: !Sub "https://${CustomDomainName}/"
+
