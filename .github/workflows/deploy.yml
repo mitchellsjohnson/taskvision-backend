@@ -18,7 +18,9 @@ jobs:
   deploy:
     name: Deploy to AWS SAM (Dev)
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}
+
+    env:
+      DEPLOY_ENV: ${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}
 
     permissions:
       contents: read
@@ -54,16 +56,16 @@ jobs:
       - name: Deploy to AWS
         run: |
           sam deploy \
-            --stack-name taskvision-${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }}-backend \
+            --stack-name taskvision-${{ env.DEPLOY_ENV }}-backend \
             --region ${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
             --force-upload \
-            --s3-prefix taskvision-${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }} \
+            --s3-prefix taskvision-${{ env.DEPLOY_ENV }} \
             --parameter-overrides \
-              Environment=${{ github.event.inputs.environment || (github.ref_name == 'main' && 'prod') || 'dev' }} \
-              ClientOriginUrl=https://${{ github.event.inputs.environment == 'prod' && '' || 'dev.' }}${{ secrets.DOMAIN_NAME }} \
+              Environment=${{ env.DEPLOY_ENV }} \
+              ClientOriginUrl=https://${{ env.DEPLOY_ENV == 'prod' && '' || 'dev.' }}${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ github.event.inputs.environment == 'prod' && 'api.' || 'dev-api.' }}${{ secrets.DOMAIN_NAME }} \
+              CustomDomainName=${{ env.DEPLOY_ENV == 'prod' && 'api.' || 'dev-api.' }}${{ secrets.DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
