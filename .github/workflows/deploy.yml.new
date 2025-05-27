@@ -18,7 +18,6 @@ jobs:
   deploy:
     name: Deploy to AWS SAM (Dev)
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       id-token: write
@@ -47,7 +46,7 @@ jobs:
         run: sam build
         working-directory: .
 
-      - name: Set environment name and prefixes
+      - name: Set environment name
         id: setenv
         run: |
           if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
@@ -56,14 +55,6 @@ jobs:
             echo "env_name=prod" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
-          fi
-
-          if [[ "${{ github.event.inputs.environment }}" == "prod" || "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "prefix=" >> $GITHUB_OUTPUT
-            echo "apiprefix=api." >> $GITHUB_OUTPUT
-          else
-            echo "prefix=dev." >> $GITHUB_OUTPUT
-            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
           fi
 
       - name: Debug: Print template.yaml
@@ -80,9 +71,8 @@ jobs:
             --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
             --parameter-overrides \
               Environment=${{ steps.setenv.outputs.env_name }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              ClientOriginUrl=https://${{ steps.setenv.outputs.env_name == 'prod' && '' || 'dev.' }}${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
+              CustomDomainName=${{ steps.setenv.outputs.env_name == 'prod' && 'api.' || 'dev-api.' }}${{ secrets.DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
-        working-directory: .
-
+        working-directory: . 
