@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, dev]
     paths:
-      - 'taskvision-backend/**'
+      - '**'
   workflow_dispatch:
     inputs:
       environment:
@@ -42,11 +42,11 @@ jobs:
 
       - name: Install backend dependencies
         run: npm ci
-        working-directory: ./taskvision-backend
+        working-directory: .
 
       - name: Build SAM application
         run: sam build
-        working-directory: ./taskvision-backend
+        working-directory: .
 
       - name: Deploy to AWS
         run: |
@@ -62,4 +62,4 @@ jobs:
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               HostedZoneId=${{ secrets.ROUTE53_ZONE_ID }}
-        working-directory: ./taskvision-backend
+        working-directory: .
