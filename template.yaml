@@ -67,7 +67,7 @@ Resources:
     Type: AWS::ApiGateway::DomainName
     Properties:
       DomainName: !Ref CustomDomainName
-      RegionalCertificateArn: !Ref CertificateArn
+      CertificateArn: !Ref CertificateArn
       EndpointConfiguration:
         Types: [REGIONAL]
 

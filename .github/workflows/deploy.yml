@@ -58,7 +58,7 @@ jobs:
             --s3-prefix taskvision-${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }} \
             --parameter-overrides \
               Environment=${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }} \
-              ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
+              ClientOriginUrl=https://${{ github.event.inputs.environment == 'prod' && '' || 'dev.' }}${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ github.event.inputs.environment == 'prod' && 'api.' || 'dev-api.' }}${{ secrets.DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
