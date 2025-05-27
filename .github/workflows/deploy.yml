@@ -49,7 +49,6 @@ jobs:
 
       - name: Set environment name and prefixes
         id: setenv
-        shell: bash
         env:
           INPUT_ENV: ${{ github.event.inputs.environment }}
           GIT_REF: ${{ github.ref_name }}
@@ -67,29 +66,3 @@ jobs:
             echo "apiprefix=api." >> $GITHUB_OUTPUT
           else
             echo "prefix=dev." >> $GITHUB_OUTPUT
-            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
-          fi
-        outputs:
-          env_name: ${{ steps.setenv.outputs.env_name }}
-          prefix: ${{ steps.setenv.outputs.prefix }}
-          apiprefix: ${{ steps.setenv.outputs.apiprefix }}
-
-      - name: Debug: Print template.yaml
-        run: cat template.yaml
-
-      - name: Deploy to AWS
-        run: |
-          sam deploy \
-            --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
-            --region ${{ secrets.AWS_REGION }} \
-            --capabilities CAPABILITY_IAM \
-            --resolve-s3 \
-            --force-upload \
-            --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
-            --parameter-overrides \
-              Environment=${{ steps.setenv.outputs.env_name }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
-              TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
-              CertificateArn=${{ secrets.CERTIFICATE_ARN }}
-        working-directory: .
