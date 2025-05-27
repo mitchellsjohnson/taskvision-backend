@@ -25,9 +25,9 @@ Parameters:
     Default: dev-api.taskvision.ai
     Description: Custom domain for API Gateway
 
-  HostedZoneId:
+  CertificateArn:
     Type: String
-    Description: Route 53 Hosted Zone ID for domain validation
+    Description: ARN of the existing ACM certificate
 
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
@@ -63,20 +63,11 @@ Resources:
             Path: /{proxy+}
             Method: ANY
 
-  Certificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Ref CustomDomainName
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Ref CustomDomainName
-          HostedZoneId: !Ref HostedZoneId
-
   CustomDomain:
     Type: AWS::ApiGateway::DomainName
     Properties:
       DomainName: !Ref CustomDomainName
-      RegionalCertificateArn: !Ref Certificate
+      RegionalCertificateArn: !Ref CertificateArn
       EndpointConfiguration:
         Types: [REGIONAL]
 
