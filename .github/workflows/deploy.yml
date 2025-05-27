@@ -2,15 +2,23 @@ name: Deploy Backend (Dev)
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'taskvision-backend/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
 
 jobs:
   deploy:
     name: Deploy to AWS SAM (Dev)
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }}
 
     permissions:
       contents: read
@@ -43,13 +51,13 @@ jobs:
       - name: Deploy to AWS
         run: |
           sam deploy \
-            --stack-name taskvision-dev-backend \
+            --stack-name taskvision-${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }}-backend \
             --region ${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
-            --s3-prefix taskvision-dev \
+            --s3-prefix taskvision-${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }} \
             --parameter-overrides \
-              Environment=${{ secrets.ENVIRONMENT }} \
+              Environment=${{ github.event.inputs.environment || github.ref_name == 'main' && 'prod' || 'dev' }} \
               ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
