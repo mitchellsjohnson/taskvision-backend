@@ -1,95 +1,91 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: Backend API for TaskVision with custom domain and Route 53 support
+name: Deploy Backend (Dev)
 
-Parameters:
-  Environment:
-    Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - prod
-    Description: Environment name for resource naming
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev or prod)'
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
 
-  ClientOriginUrl:
-    Type: String
-    Default: '*'
-    Description: Allowed CORS origin URL
+jobs:
+  deploy:
+    name: Deploy to AWS SAM (Dev)
+    runs-on: ubuntu-latest
 
-  TableName:
-    Type: String
-    Description: Name of an existing DynamoDB table
+    permissions:
+      contents: read
+      id-token: write
 
-  CustomDomainName:
-    Type: String
-    Default: dev-api.taskvision.ai
-    Description: Custom domain for API Gateway
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-  CertificateArn:
-    Type: String
-    Description: ARN of the existing ACM certificate
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-Resources:
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: .
 
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: Prod
+      - name: Build SAM application
+        run: sam build
+        working-directory: .
 
-  TaskVisionFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: .
-      Handler: lambda.handler
-      Runtime: nodejs18.x
-      Architectures: [x86_64]
-      MemorySize: 128
-      Timeout: 30
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref TableName
-          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TableName
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /{proxy+}
-            Method: ANY
+      - name: Set environment name and prefixes
+        id: setenv
+        shell: bash
+        env:
+          INPUT_ENV: ${{ github.event.inputs.environment }}
+          GIT_REF: ${{ github.ref_name }}
+        run: |
+          if [[ "$INPUT_ENV" != "" ]]; then
+            echo "env_name=$INPUT_ENV" >> $GITHUB_OUTPUT
+          elif [[ "$GIT_REF" == "main" ]]; then
+            echo "env_name=prod" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=dev" >> $GITHUB_OUTPUT
+          fi
 
-  CustomDomain:
-    Type: AWS::ApiGateway::DomainName
-    Properties:
-      DomainName: !Ref CustomDomainName
-      CertificateArn: !Ref CertificateArn
-      EndpointConfiguration:
-        Types: [REGIONAL]
+          if [[ "$INPUT_ENV" == "prod" || "$GIT_REF" == "main" ]]; then
+            echo "prefix=" >> $GITHUB_OUTPUT
+            echo "apiprefix=api." >> $GITHUB_OUTPUT
+          else
+            echo "prefix=dev." >> $GITHUB_OUTPUT
+            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
+          fi
 
-  BasePathMapping:
-    Type: AWS::ApiGateway::BasePathMapping
-    Properties:
-      DomainName: !Ref CustomDomain
-      RestApiId: !Ref ApiGateway
-      Stage: Prod
+      - name: Debug: Print template.yaml
+        run: cat template.yaml
 
-  Route53Record:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneName: taskvision.ai.
-      Name: !Ref CustomDomainName
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt CustomDomain.RegionalDomainName
-        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
-
-Outputs:
-  ApiUrl:
-    Description: "Deployed API Gateway custom domain"
-    Value: !Sub "https://${CustomDomainName}/"
-
+      - name: Deploy to AWS
+        run: |
+          sam deploy \
+            --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
+            --region ${{ secrets.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --force-upload \
+            --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
+            --parameter-overrides \
+              Environment=${{ steps.setenv.outputs.env_name }} \
+              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
+              CertificateArn=${{ secrets.CERTIFICATE_ARN }}
+        working-directory: .
