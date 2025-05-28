@@ -18,6 +18,7 @@ jobs:
   deploy:
     name: Deploy to AWS SAM (Dev)
     runs-on: ubuntu-latest
+    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -78,9 +79,9 @@ jobs:
             --force-upload \
             --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
             --parameter-overrides \
-              Environment=${{ secrets.ENVIRONMENT }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
-              TableName=${{ secrets.ENVIRONMENT }} \
-              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
+              Environment=${{ vars.ENVIRONMENT }} \
+              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ vars.DOMAIN_NAME }} \
+              TableName=${{ vars.TABLE_NAME }} \
+              CustomDomainName=${{ vars.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
