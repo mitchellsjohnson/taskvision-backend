@@ -61,12 +61,16 @@ jobs:
           fi
       - name: Check required secrets
         run: |
-          if [[ -z "${{ secrets.TABLE_NAME }}" ]]; then
-            echo "::error::TABLE_NAME secret is not set in GitHub repository"
+          if [[ -z "${{ secrets.ENVIRONMENT }}" ]]; then
+            echo "::error::ENVIRONMENT secret is not set in GitHub repository"
             exit 1
           fi
           if [[ -z "${{ secrets.DOMAIN_NAME }}" ]]; then
             echo "::error::DOMAIN_NAME secret is not set in GitHub repository"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.CUSTOM_DOMAIN_NAME }}" ]]; then
+            echo "::error::CUSTOM_DOMAIN_NAME secret is not set in GitHub repository"
             exit 1
           fi
           if [[ -z "${{ secrets.CERTIFICATE_ARN }}" ]]; then
@@ -94,7 +98,7 @@ jobs:
             --parameter-overrides \
               Environment=${{ secrets.ENVIRONMENT }} \
               ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
-              TableName=${{ secrets.TABLE_NAME }} \
+              TableName=${{ secrets.ENVIRONMENT }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
