@@ -40,8 +40,7 @@ Resources:
       Domain:
         DomainName: !Ref CustomDomainName
         CertificateArn: !Ref CertificateArn
-        EndpointConfiguration:
-          Type: REGIONAL
+        EndpointConfiguration: REGIONAL
         SecurityPolicy: TLS_1_2
 
   TaskVisionFunction:
