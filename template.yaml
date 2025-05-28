@@ -1,89 +1,69 @@
-I see the issue! The workflow file is missing the name: key at the very beginning. Here's the corrected version:
-yamlname: Deploy Backend (Dev)
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TaskVision Backend API
 
-on:
-  push:
-    branches: [main, dev]
-    paths:
-      - '**'
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (dev or prod)'
-        required: true
-        default: dev
-        type: choice
-        options: [dev, prod]
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name
 
-jobs:
-  deploy:
-    name: Deploy to AWS SAM (Dev)
-    runs-on: ubuntu-latest
+  ClientOriginUrl:
+    Type: String
+    Description: Allowed CORS origin URL
 
-    permissions:
-      contents: read
-      id-token: write
+  TableName:
+    Type: String
+    Description: DynamoDB table name
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  CustomDomainName:
+    Type: String
+    Description: Custom domain name for API Gateway
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN for custom domain
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+Resources:
+  TaskVisionApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: !Ref ClientOriginUrl
+      Domain:
+        DomainName: !Ref CustomDomainName
+        CertificateArn: !Ref CertificateArn
+        EndpointConfiguration:
+          Type: REGIONAL
+        SecurityPolicy: TLS_1_2
 
-      - name: Install backend dependencies
-        run: npm ci
-        working-directory: .
-
-      - name: Build SAM application
-        run: sam build
-        working-directory: .
-
-      - name: Set environment name and prefixes
-        id: setenv
-        shell: bash
-        run: |
-          if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
-            echo "env_name=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "env_name=prod" >> $GITHUB_ENV
-          else
-            echo "env_name=dev" >> $GITHUB_ENV
-          fi
-
-          if [[ "$env_name" == "prod" ]]; then
-            echo "prefix=" >> $GITHUB_ENV
-            echo "apiprefix=api." >> $GITHUB_ENV
-          else
-            echo "prefix=dev." >> $GITHUB_ENV
-            echo "apiprefix=dev-api." >> $GITHUB_ENV
-          fi
-
-      - name: Debug: Print template.yaml
-        run: cat template.yaml
-
-      - name: Deploy to AWS
-        run: |
-          sam deploy \
-            --stack-name taskvision-${env_name}-backend \
-            --region ${{ secrets.AWS_REGION }} \
-            --capabilities CAPABILITY_IAM \
-            --resolve-s3 \
-            --force-upload \
-            --s3-prefix taskvision-${env_name} \
-            --parameter-overrides \
-              Environment=${env_name} \
-              ClientOriginUrl=https://${prefix}${{ secrets.DOMAIN_NAME }} \
-              TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${apiprefix}${{ secrets.DOMAIN_NAME }} \
-              CertificateArn=${{ secrets.CERTIFICATE_ARN }}
-        working-directory: .
+  TaskVisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          ENVIRONMENT: !Ref Environment
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaskVisionApi
+            Path: /{proxy+}
+            Method: ANY
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
