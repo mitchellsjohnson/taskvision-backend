@@ -77,5 +77,10 @@ jobs:
             --resolve-s3 \
             --force-upload \
             --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
-            --parameter-overrides "Environment=${{ steps.setenv.outputs.env_name }} ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} TableName=${{ secrets.TABLE_NAME }} CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} CertificateArn=${{ secrets.CERTIFICATE_ARN }}"
+            --parameter-overrides \
+              Environment=${{ steps.setenv.outputs.env_name }} \
+              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
+              CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
