@@ -1,4 +1,3 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: TaskVision Backend API
@@ -36,7 +35,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: !Ref ClientOriginUrl
+        AllowOrigin: "'!Ref ClientOriginUrl'"
       Domain:
         DomainName: !Ref CustomDomainName
         CertificateArn: !Ref CertificateArn
