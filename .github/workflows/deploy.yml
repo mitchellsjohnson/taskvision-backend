@@ -71,6 +71,13 @@ jobs:
           fi
       - name: Deploy to AWS
         run: |
+          echo "Debug: Environment variables"
+          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
+          echo "DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}"
+          echo "TABLE_NAME: ${{ vars.TABLE_NAME }}"
+          echo "CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}"
+          echo "CERTIFICATE_ARN: ${{ secrets.CERTIFICATE_ARN }}"
+          
           sam deploy \
             --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
             --region ${{ secrets.AWS_REGION }} \
