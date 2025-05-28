@@ -50,24 +50,21 @@ jobs:
       - name: Set environment name and prefixes
         id: setenv
         shell: bash
-        env:
-          INPUT_ENV: ${{ github.event.inputs.environment }}
-          GIT_REF: ${{ github.ref_name }}
         run: |
-          if [[ "$INPUT_ENV" != "" ]]; then
-            echo "env_name=$INPUT_ENV" >> $GITHUB_OUTPUT
-          elif [[ "$GIT_REF" == "main" ]]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
+            echo "env_name=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "env_name=prod" >> $GITHUB_ENV
           else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
+            echo "env_name=dev" >> $GITHUB_ENV
           fi
 
-          if [[ "$INPUT_ENV" == "prod" || "$GIT_REF" == "main" ]]; then
-            echo "prefix=" >> $GITHUB_OUTPUT
-            echo "apiprefix=api." >> $GITHUB_OUTPUT
+          if [[ "$env_name" == "prod" ]]; then
+            echo "prefix=" >> $GITHUB_ENV
+            echo "apiprefix=api." >> $GITHUB_ENV
           else
-            echo "prefix=dev." >> $GITHUB_OUTPUT
-            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
+            echo "prefix=dev." >> $GITHUB_ENV
+            echo "apiprefix=dev-api." >> $GITHUB_ENV
           fi
 
       - name: Debug: Print template.yaml
@@ -76,16 +73,16 @@ jobs:
       - name: Deploy to AWS
         run: |
           sam deploy \
-            --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
+            --stack-name taskvision-${env_name}-backend \
             --region ${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
             --force-upload \
-            --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
+            --s3-prefix taskvision-${env_name} \
             --parameter-overrides \
-              Environment=${{ steps.setenv.outputs.env_name }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              Environment=${env_name} \
+              ClientOriginUrl=https://${prefix}${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
+              CustomDomainName=${apiprefix}${{ secrets.DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
