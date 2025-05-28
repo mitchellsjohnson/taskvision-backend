@@ -22,25 +22,31 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+
       - name: Install backend dependencies
         run: npm ci
         working-directory: .
+
       - name: Build SAM application
         run: sam build
         working-directory: .
+
       - name: Set environment name and prefixes
         id: setenv
         shell: bash
@@ -60,6 +66,7 @@ jobs:
             echo "prefix=dev." >> $GITHUB_OUTPUT
             echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
           fi
+
       - name: Check and delete ROLLBACK_COMPLETE stack
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
@@ -69,6 +76,7 @@ jobs:
             echo "Waiting for stack deletion to complete..."
             aws cloudformation wait stack-delete-complete --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend
           fi
+
       - name: Deploy to AWS
         run: |
           echo "Debug: Environment variables"
@@ -76,8 +84,8 @@ jobs:
           echo "DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}"
           echo "TABLE_NAME: ${{ vars.TABLE_NAME }}"
           echo "CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}"
-          echo "CERTIFICATE_ARN: ${{ secrets.CERTIFICATE_ARN }}"
-          
+          echo "CERTIFICATE_ARN: ***"
+
           sam deploy \
             --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
             --region ${{ secrets.AWS_REGION }} \
