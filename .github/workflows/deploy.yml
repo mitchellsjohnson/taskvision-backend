@@ -61,22 +61,33 @@ jobs:
           fi
       - name: Check required secrets
         run: |
-          if [[ -z "${{ secrets.ENVIRONMENT }}" ]]; then
+          echo "Checking ENVIRONMENT secret..."
+          if [[ "${{ secrets.ENVIRONMENT }}" == "" ]]; then
             echo "::error::ENVIRONMENT secret is not set in GitHub repository"
             exit 1
           fi
-          if [[ -z "${{ secrets.DOMAIN_NAME }}" ]]; then
+          echo "ENVIRONMENT secret is set"
+          
+          echo "Checking DOMAIN_NAME secret..."
+          if [[ "${{ secrets.DOMAIN_NAME }}" == "" ]]; then
             echo "::error::DOMAIN_NAME secret is not set in GitHub repository"
             exit 1
           fi
-          if [[ -z "${{ secrets.CUSTOM_DOMAIN_NAME }}" ]]; then
+          echo "DOMAIN_NAME secret is set"
+          
+          echo "Checking CUSTOM_DOMAIN_NAME secret..."
+          if [[ "${{ secrets.CUSTOM_DOMAIN_NAME }}" == "" ]]; then
             echo "::error::CUSTOM_DOMAIN_NAME secret is not set in GitHub repository"
             exit 1
           fi
-          if [[ -z "${{ secrets.CERTIFICATE_ARN }}" ]]; then
+          echo "CUSTOM_DOMAIN_NAME secret is set"
+          
+          echo "Checking CERTIFICATE_ARN secret..."
+          if [[ "${{ secrets.CERTIFICATE_ARN }}" == "" ]]; then
             echo "::error::CERTIFICATE_ARN secret is not set in GitHub repository"
             exit 1
           fi
+          echo "CERTIFICATE_ARN secret is set"
       - name: Check and delete ROLLBACK_COMPLETE stack
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
