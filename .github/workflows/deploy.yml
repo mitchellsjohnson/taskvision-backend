@@ -59,6 +59,15 @@ jobs:
             echo "prefix=dev." >> $GITHUB_OUTPUT
             echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
           fi
+      - name: Check and delete ROLLBACK_COMPLETE stack
+        run: |
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
+          if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
+            echo "Stack is in ROLLBACK_COMPLETE state. Deleting stack..."
+            aws cloudformation delete-stack --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend
+            echo "Waiting for stack deletion to complete..."
+            aws cloudformation wait stack-delete-complete --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend
+          fi
       - name: Deploy to AWS
         run: |
           sam deploy \
