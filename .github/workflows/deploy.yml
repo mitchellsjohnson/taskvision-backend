@@ -69,21 +69,22 @@ jobs:
 
       - name: Check and delete ROLLBACK_COMPLETE stack
         run: |
-          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
+          STACK_NAME="taskvision-${{ steps.setenv.outputs.env_name }}-backend"
+          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
           if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
             echo "Stack is in ROLLBACK_COMPLETE state. Deleting stack..."
-            aws cloudformation delete-stack --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend
+            aws cloudformation delete-stack --stack-name $STACK_NAME
             echo "Waiting for stack deletion to complete..."
-            aws cloudformation wait stack-delete-complete --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend
+            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
           fi
 
       - name: Deploy to AWS
         run: |
           echo "Debug: Environment variables"
-          echo "ENVIRONMENT: ${{ vars.ENVIRONMENT }}"
-          echo "DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}"
-          echo "TABLE_NAME: ${{ vars.TABLE_NAME }}"
-          echo "CUSTOM_DOMAIN_NAME: ${{ vars.CUSTOM_DOMAIN_NAME }}"
+          echo "ENVIRONMENT: ${{ secrets.ENVIRONMENT }}"
+          echo "DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}"
+          echo "TABLE_NAME: ${{ secrets.TABLE_NAME }}"
+          echo "CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}"
           echo "CERTIFICATE_ARN: ***"
 
           sam deploy \
@@ -94,9 +95,9 @@ jobs:
             --force-upload \
             --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
             --parameter-overrides \
-              Environment=${{ vars.ENVIRONMENT }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ vars.DOMAIN_NAME }} \
-              TableName=${{ vars.TABLE_NAME }} \
-              CustomDomainName=${{ vars.CUSTOM_DOMAIN_NAME }} \
+              Environment=${{ secrets.ENVIRONMENT }} \
+              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
