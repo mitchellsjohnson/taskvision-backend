@@ -49,20 +49,20 @@ jobs:
 
       - name: Set environment name and prefixes
         id: setenv
-        env:
-          INPUT_ENV: ${{ github.event.inputs.environment }}
-          GIT_REF: ${{ github.ref_name }}
+        shell: bash
         run: |
-          if [[ "$INPUT_ENV" != "" ]]; then
-            echo "env_name=$INPUT_ENV" >> $GITHUB_OUTPUT
-          elif [[ "$GIT_REF" == "main" ]]; then
+          if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
+            echo "env_name=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
             echo "env_name=prod" >> $GITHUB_OUTPUT
           else
             echo "env_name=dev" >> $GITHUB_OUTPUT
           fi
 
-          if [[ "$INPUT_ENV" == "prod" || "$GIT_REF" == "main" ]]; then
+          if [[ "${{ github.event.inputs.environment }}" == "prod" || "${{ github.ref_name }}" == "main" ]]; then
             echo "prefix=" >> $GITHUB_OUTPUT
             echo "apiprefix=api." >> $GITHUB_OUTPUT
           else
             echo "prefix=dev." >> $GITHUB_OUTPUT
+            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
+          fi
