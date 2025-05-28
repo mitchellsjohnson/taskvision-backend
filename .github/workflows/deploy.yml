@@ -59,6 +59,20 @@ jobs:
             echo "prefix=dev." >> $GITHUB_OUTPUT
             echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
           fi
+      - name: Check required secrets
+        run: |
+          if [[ -z "${{ secrets.TABLE_NAME }}" ]]; then
+            echo "::error::TABLE_NAME secret is not set in GitHub repository"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.DOMAIN_NAME }}" ]]; then
+            echo "::error::DOMAIN_NAME secret is not set in GitHub repository"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.CERTIFICATE_ARN }}" ]]; then
+            echo "::error::CERTIFICATE_ARN secret is not set in GitHub repository"
+            exit 1
+          fi
       - name: Check and delete ROLLBACK_COMPLETE stack
         run: |
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
@@ -78,9 +92,9 @@ jobs:
             --force-upload \
             --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
             --parameter-overrides \
-              Environment=${{ steps.setenv.outputs.env_name }} \
+              Environment=${{ secrets.ENVIRONMENT }} \
               ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ steps.setenv.outputs.apiprefix }}${{ secrets.DOMAIN_NAME }} \
+              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
