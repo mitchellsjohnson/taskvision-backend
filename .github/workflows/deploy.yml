@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - '**'
   workflow_dispatch:
@@ -53,7 +53,6 @@ jobs:
       - name: Deploy to AWS
         run: |
           echo "Debug: Environment variables"
-          echo "ENVIRONMENT: ${{ secrets.ENVIRONMENT }}"
           echo "DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}"
           echo "TABLE_NAME: ${{ secrets.TABLE_NAME }}"
           echo "CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}"
@@ -66,7 +65,6 @@ jobs:
             --resolve-s3 \
             --force-upload \
             --parameter-overrides \
-              Environment=${{ secrets.ENVIRONMENT }} \
               ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
