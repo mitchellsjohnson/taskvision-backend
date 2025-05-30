@@ -1,24 +1,16 @@
-name: Deploy Backend (Dev)
+name: Deploy Backend
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - '**'
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy (dev or prod)'
-        required: true
-        default: dev
-        type: choice
-        options: [dev, prod]
 
 jobs:
   deploy:
-    name: Deploy to AWS SAM (Dev)
+    name: Deploy to AWS SAM
     runs-on: ubuntu-latest
-    environment: dev
     permissions:
       contents: read
       id-token: write
@@ -47,29 +39,9 @@ jobs:
         run: sam build
         working-directory: .
 
-      - name: Set environment name and prefixes
-        id: setenv
-        shell: bash
-        run: |
-          if [[ "${{ github.event.inputs.environment }}" != "" ]]; then
-            echo "env_name=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "env_name=prod" >> $GITHUB_OUTPUT
-          else
-            echo "env_name=dev" >> $GITHUB_OUTPUT
-          fi
-
-          if [[ "${{ github.event.inputs.environment }}" == "prod" || "${{ github.ref_name }}" == "main" ]]; then
-            echo "prefix=" >> $GITHUB_OUTPUT
-            echo "apiprefix=api." >> $GITHUB_OUTPUT
-          else
-            echo "prefix=dev." >> $GITHUB_OUTPUT
-            echo "apiprefix=dev-api." >> $GITHUB_OUTPUT
-          fi
-
       - name: Check and delete ROLLBACK_COMPLETE stack
         run: |
-          STACK_NAME="taskvision-${{ steps.setenv.outputs.env_name }}-backend"
+          STACK_NAME="taskvision-backend"
           STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
           if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
             echo "Stack is in ROLLBACK_COMPLETE state. Deleting stack..."
@@ -88,15 +60,14 @@ jobs:
           echo "CERTIFICATE_ARN: ***"
 
           sam deploy \
-            --stack-name taskvision-${{ steps.setenv.outputs.env_name }}-backend \
+            --stack-name taskvision-backend \
             --region ${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
             --force-upload \
-            --s3-prefix taskvision-${{ steps.setenv.outputs.env_name }} \
             --parameter-overrides \
               Environment=${{ secrets.ENVIRONMENT }} \
-              ClientOriginUrl=https://${{ steps.setenv.outputs.prefix }}${{ secrets.DOMAIN_NAME }} \
+              ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}

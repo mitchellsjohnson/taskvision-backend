@@ -3,14 +3,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: TaskVision Backend API
 
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - prod
-    Description: Environment name
-
   ClientOriginUrl:
     Type: String
     Description: Allowed CORS origin URL
@@ -31,7 +23,7 @@ Resources:
   TaskVisionApi:
     Type: AWS::Serverless::Api
     Properties:
-      StageName: !Ref Environment
+      StageName: prod
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
@@ -55,7 +47,7 @@ Resources:
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
-          ENVIRONMENT: !Ref Environment
+          ENVIRONMENT: prod
       Events:
         ApiEvent:
           Type: Api

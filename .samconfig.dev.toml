@@ -1,0 +1,9 @@
+version = 0.1
+
+[dev.deploy.parameters]
+stack_name = "taskvision-backend"
+resolve_s3 = true
+s3_prefix = "taskvision"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "ClientOriginUrl=\"https://taskvision.ai\" TableName=\"taskvision-table\" CustomDomainName=\"api.taskvision.ai\""
