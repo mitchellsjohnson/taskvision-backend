@@ -10,4 +10,4 @@ resolve_s3 = true
 s3_prefix = "your-dev-s3-prefix"
 region = "your-aws-region"
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"dev\" ClientOriginUrl=\"https://your-dev-frontend-domain\" TableName=\"your-dev-table-name\" CustomDomainName=\"your-dev-api-domain\" HostedZoneId=\"your-hosted-zone-id\""
+parameter_overrides = "Environment=\"dev\" ClientOriginUrl=\"https://taskvision.ai\" TableName=\"your-dev-table-name\" CustomDomainName=\"api.taskvision.ai\" HostedZoneId=\"your-hosted-zone-id\""

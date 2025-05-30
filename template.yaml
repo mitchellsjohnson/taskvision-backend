@@ -3,14 +3,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: Backend API for TaskVision with custom domain and Route 53 support
 
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
-    AllowedValues:
-      - dev
-      - prod
-    Description: Environment name for resource naming
-
   ClientOriginUrl:
     Type: String
     Default: '*'
@@ -22,18 +14,14 @@ Parameters:
 
   CustomDomainName:
     Type: String
-    Default: dev-api.taskvision.ai
+    Default: api.taskvision.ai
     Description: Custom domain for API Gateway
 
   HostedZoneId:
     Type: String
     Description: Route 53 Hosted Zone ID for domain validation
 
-Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
-
 Resources:
-
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
