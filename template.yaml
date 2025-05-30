@@ -26,8 +26,10 @@ Resources:
       StageName: prod
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: "'!Ref ClientOriginUrl'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'https://taskvision.ai'"
+        AllowCredentials: true
+        MaxAge: "'86400'"
       Domain:
         DomainName: !Ref CustomDomainName
         CertificateArn: !Ref CertificateArn
@@ -48,6 +50,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref TableName
           ENVIRONMENT: prod
+          CLIENT_ORIGIN_URL: 'https://taskvision.ai'
       Events:
         ApiEvent:
           Type: Api
