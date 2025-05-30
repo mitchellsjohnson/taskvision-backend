@@ -53,7 +53,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref TaskVisionApi
-            Path: /{proxy+}
+            Path: /api/messages
             Method: ANY
       Policies:
         - DynamoDBCrudPolicy:
