@@ -2,7 +2,7 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
     paths:
       - '**'
   workflow_dispatch:
@@ -39,25 +39,8 @@ jobs:
         run: sam build
         working-directory: .
 
-      - name: Check and delete ROLLBACK_COMPLETE stack
-        run: |
-          STACK_NAME="taskvision-backend"
-          STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "STACK_NOT_FOUND")
-          if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
-            echo "Stack is in ROLLBACK_COMPLETE state. Deleting stack..."
-            aws cloudformation delete-stack --stack-name $STACK_NAME
-            echo "Waiting for stack deletion to complete..."
-            aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME
-          fi
-
       - name: Deploy to AWS
         run: |
-          echo "Debug: Environment variables"
-          echo "DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}"
-          echo "TABLE_NAME: ${{ secrets.TABLE_NAME }}"
-          echo "CUSTOM_DOMAIN_NAME: ${{ secrets.CUSTOM_DOMAIN_NAME }}"
-          echo "CERTIFICATE_ARN: ***"
-
           sam deploy \
             --stack-name taskvision-backend \
             --region ${{ secrets.AWS_REGION }} \
@@ -70,3 +53,8 @@ jobs:
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
               CertificateArn=${{ secrets.CERTIFICATE_ARN }}
         working-directory: .
+
+      - name: Clean Up Resources
+        run: |
+          aws cloudformation delete-stack --stack-name taskvision-backend
+          aws cloudformation wait stack-delete-complete --stack-name taskvision-backend
