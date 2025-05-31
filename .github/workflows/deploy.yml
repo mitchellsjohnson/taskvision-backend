@@ -8,8 +8,13 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout source
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -43,23 +48,21 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
 
       - name: Deploy to AWS
         run: |
           sam deploy \
             --stack-name taskvision-backend \
-            --region ${{ secrets.AWS_REGION }} \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
             --force-upload \
             --parameter-overrides \
-              ParameterKey=ClientOriginUrl,ParameterValue=https://${{ secrets.DOMAIN_NAME }} \
-              ParameterKey=TableName,ParameterValue=${{ secrets.TABLE_NAME }} \
-              ParameterKey=CustomDomainName,ParameterValue=${{ secrets.CUSTOM_DOMAIN_NAME }} \
-              ParameterKey=HostedZoneId,ParameterValue=${{ steps.hostedzone.outputs.zone_id }} \
-              ParameterKey=AUTH0_DOMAIN,ParameterValue=${{ secrets.AUTH0_DOMAIN }} \
-              ParameterKey=AUTH0_AUDIENCE,ParameterValue=${{ secrets.AUTH0_AUDIENCE }}
+              ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
+              HostedZoneId=${{ steps.hostedzone.outputs.zone_id }} \
+              Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
+              Auth0Audience=${{ secrets.AUTH0_AUDIENCE }}
         working-directory: .
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -21,11 +21,11 @@ Parameters:
     Type: String
     Description: Route 53 Hosted Zone ID for domain validation
 
-  AUTH0_DOMAIN:
+  Auth0Domain:
     Type: String
     Description: Auth0 domain
 
-  AUTH0_AUDIENCE:
+  Auth0Audience:
     Type: String
     Description: Auth0 audience
 
@@ -53,8 +53,8 @@ Resources:
         Variables:
           TABLE_NAME: !Ref TableName
           CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-          AUTH0_DOMAIN: !Ref AUTH0_DOMAIN
-          AUTH0_AUDIENCE: !Ref AUTH0_AUDIENCE
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_AUDIENCE: !Ref Auth0Audience
           NODE_ENV: "production"
       Policies:
         - DynamoDBCrudPolicy:
