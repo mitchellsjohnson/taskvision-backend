@@ -30,6 +30,13 @@ jobs:
         run: rm -rf .aws-sam
         working-directory: .
 
+      - name: Validate DOMAIN_NAME is not placeholder
+        run: |
+          if [[ "${{ secrets.DOMAIN_NAME }}" == "***" ]]; then
+            echo "❌ DOMAIN_NAME secret is still set to a placeholder (***)."
+            exit 1
+          fi
+
       - name: Build SAM application
         run: sam build
         working-directory: .
@@ -58,6 +65,7 @@ jobs:
         run: |
           sam deploy \
             --stack-name taskvision-backend \
+            --region $AWS_REGION \
             --capabilities CAPABILITY_IAM \
             --resolve-s3 \
             --force-upload \
