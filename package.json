@@ -7,7 +7,7 @@
     "start": "cross-env NODE_ENV=development ts-node src/index.ts",
     "dev": "ts-node-dev --respawn --pretty --transpile-only src/index.ts",
     "build": "tsc && npm run copy-files",
-    "copy-files": "cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/",
+    "copy-files": "mkdir -p .aws-sam/build/TaskVisionFunction && cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/ && cd .aws-sam/build/TaskVisionFunction && npm install --production",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
