@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Minimal backend API for TaskVision (Lambda + API Gateway)
+Description: Backend API for TaskVision with custom domain and Route 53 support
 
 Parameters:
   ClientOriginUrl:
@@ -11,6 +11,15 @@ Parameters:
   TableName:
     Type: String
     Description: Name of an existing DynamoDB table
+
+  CustomDomainName:
+    Type: String
+    Default: api.taskvision.ai
+    Description: Custom domain for API Gateway
+
+  HostedZoneId:
+    Type: String
+    Description: Route 53 Hosted Zone ID for domain validation
 
   Auth0Domain:
     Type: String
@@ -24,13 +33,12 @@ Resources:
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
-      Name: taskvision-backend
       StageName: Prod
       Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: !Sub "'${ClientOriginUrl}'"
-        MaxAge: "'86400'"
+        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
+        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+        AllowOrigin: !Ref ClientOriginUrl
+        MaxAge: "86400"
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
@@ -59,7 +67,41 @@ Resources:
             Path: /{proxy+}
             Method: ANY
 
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref CustomDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref CustomDomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref CustomDomainName
+      RegionalCertificateArn: !Ref Certificate
+      EndpointConfiguration:
+        Types: [REGIONAL]
+
+  BasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref CustomDomain
+      RestApiId: !Ref ApiGateway
+      Stage: Prod
+
+  Route53Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: taskvision.ai.
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+
 Outputs:
   ApiUrl:
-    Description: Default endpoint (for testing only)
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Description: "Deployed API Gateway custom domain"
+    Value: !Sub "https://${CustomDomainName}/"
