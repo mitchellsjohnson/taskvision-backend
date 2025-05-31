@@ -21,33 +21,41 @@ Parameters:
     Type: String
 
 Resources:
+
+  TaskVisionApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: TaskVisionApi
+      StageName: Prod
+      Cors:
+        AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
+        AllowHeaders: "'Authorization,Content-Type,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: !Sub "'${ClientOriginUrl}'"
+        MaxAge: "'86400'"
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
       Handler: src/lambda.handler
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref TableName
-          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-          AUTH0_DOMAIN: !Ref Auth0Domain
-          AUTH0_AUDIENCE: !Ref Auth0Audience
       Events:
         ProxyApi:
           Type: Api
           Properties:
             Path: /{proxy+}
             Method: ANY
-        RootApi:
-          Type: Api
-          Properties:
-            Path: /
-            Method: ANY
+            RestApiId: !Ref TaskVisionApi
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_AUDIENCE: !Ref Auth0Audience
 
 Outputs:
   ApiUrl:
-    Description: API Gateway endpoint
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Description: API Gateway endpoint (default)
+    Value: !Sub "https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   FunctionName:
-    Description: Lambda function name
+    Description: Name of Lambda function
     Value: !Ref TaskVisionFunction
