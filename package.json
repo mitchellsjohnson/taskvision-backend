@@ -6,11 +6,12 @@
   "scripts": {
     "start": "cross-env NODE_ENV=development ts-node src/index.ts",
     "dev": "ts-node-dev --respawn --pretty --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "tsc && npm run copy-files",
+    "copy-files": "cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "sam:build": "tsc && sam build",
+    "sam:build": "npm run build && sam build",
     "sam:deploy": "sam deploy --guided",
     "sam:local": "sam local start-api"
   },
