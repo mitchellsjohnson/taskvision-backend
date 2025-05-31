@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaskVision backend infrastructure
+Description: TaskVision backend infrastructure – deploys Lambda and API only
 
 Globals:
   Function:
@@ -15,17 +15,10 @@ Parameters:
     Type: String
   TableName:
     Type: String
-  CustomDomainName:
-    Type: String
-  HostedZoneId:
-    Type: String
   Auth0Domain:
     Type: String
   Auth0Audience:
     Type: String
-  CertificateArn:
-    Type: String
-    Description: ARN of the existing ACM certificate
 
 Resources:
 
@@ -52,36 +45,10 @@ Resources:
             Path: /
             Method: ANY
 
-  CustomDomain:
-    Type: AWS::ApiGateway::DomainName
-    Properties:
-      DomainName: !Ref CustomDomainName
-      CertificateArn: !Ref CertificateArn
-      EndpointConfiguration:
-        Types:
-          - EDGE
-
-  BasePathMapping:
-    Type: AWS::ApiGateway::BasePathMapping
-    Properties:
-      DomainName: !Ref CustomDomain
-      RestApiId: !Ref ServerlessRestApi
-      Stage: Prod
-
-  Route53Record:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Ref CustomDomainName
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt CustomDomain.DistributionDomainName
-        HostedZoneId: Z2FDTNDATAQYW2  # This is the standard for CloudFront
-
 Outputs:
   ApiUrl:
-    Description: API Gateway endpoint
-    Value: !Sub "https://${CustomDomainName}/"
+    Description: API Gateway endpoint (default)
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   FunctionName:
     Description: Name of Lambda function
     Value: !Ref TaskVisionFunction
