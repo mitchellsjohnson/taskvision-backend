@@ -54,12 +54,12 @@ jobs:
             --resolve-s3 \
             --force-upload \
             --parameter-overrides \
-              ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
-              TableName=${{ secrets.TABLE_NAME }} \
-              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
-              HostedZoneId=${{ steps.hostedzone.outputs.zone_id }} \
-              AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }} \
-              AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+              ParameterKey=ClientOriginUrl,ParameterValue=https://${{ secrets.DOMAIN_NAME }} \
+              ParameterKey=TableName,ParameterValue=${{ secrets.TABLE_NAME }} \
+              ParameterKey=CustomDomainName,ParameterValue=${{ secrets.CUSTOM_DOMAIN_NAME }} \
+              ParameterKey=HostedZoneId,ParameterValue=${{ steps.hostedzone.outputs.zone_id }} \
+              ParameterKey=AUTH0_DOMAIN,ParameterValue=${{ secrets.AUTH0_DOMAIN }} \
+              ParameterKey=AUTH0_AUDIENCE,ParameterValue=${{ secrets.AUTH0_AUDIENCE }}
         working-directory: .
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
