@@ -1,61 +1,50 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-Description: TaskVision backend infrastructure – deploys Lambda and API only
+name: Deploy Backend
 
-Globals:
-  Function:
-    Timeout: 10
-    Runtime: nodejs18.x
-    MemorySize: 128
-    Architectures:
-      - x86_64
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-Parameters:
-  ClientOriginUrl:
-    Type: String
-  TableName:
-    Type: String
-  Auth0Domain:
-    Type: String
-  Auth0Audience:
-    Type: String
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-Resources:
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
-  TaskVisionApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: TaskVisionApi
-      StageName: Prod
-      Cors:
-        AllowMethods: "'OPTIONS,GET,POST,PUT,DELETE'"
-        AllowHeaders: "'Authorization,Content-Type,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: !Sub "'${ClientOriginUrl}'"
-        MaxAge: "'86400'"
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
 
-  TaskVisionFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: .
-      Handler: src/lambda.handler
-      Events:
-        ProxyApi:
-          Type: Api
-          Properties:
-            Path: /{proxy+}
-            Method: ANY
-            RestApiId: !Ref TaskVisionApi
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref TableName
-          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-          AUTH0_DOMAIN: !Ref Auth0Domain
-          AUTH0_AUDIENCE: !Ref Auth0Audience
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-Outputs:
-  ApiUrl:
-    Description: API Gateway endpoint (default)
-    Value: !Sub "https://${TaskVisionApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-  FunctionName:
-    Description: Name of Lambda function
-    Value: !Ref TaskVisionFunction
+      - name: Install dependencies
+        run: npm install
+
+      - name: Clean previous SAM build
+        run: rm -rf .aws-sam
+
+      - name: Build SAM application
+        run: sam build
+
+      - name: Deploy to AWS
+        run: |
+          sam deploy \
+            --stack-name taskvision-backend \
+            --region $AWS_REGION \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
+              Auth0Audience=${{ secrets.AUTH0_AUDIENCE }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
