@@ -105,4 +105,3 @@ Outputs:
   ApiUrl:
     Description: "Deployed API Gateway custom domain"
     Value: !Sub "https://${CustomDomainName}/"
-
