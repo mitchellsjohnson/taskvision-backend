@@ -54,24 +54,23 @@ app.use((req, res, next) => {
 // Prevent caching
 app.use(nocache());
 
-// CORS setup
-app.use(
-  cors({
-    origin: CLIENT_ORIGIN_URL,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-      "X-Amz-Date",
-      "X-Api-Key",
-      "X-Amz-Security-Token"
-    ],
-    maxAge: 86400,
-  })
-);
+// Unified CORS configuration
+const corsOptions = {
+  origin: CLIENT_ORIGIN_URL,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type",
+    "X-Amz-Date",
+    "X-Api-Key",
+    "X-Amz-Security-Token"
+  ],
+  credentials: true,
+  maxAge: 86400,
+};
 
-// Handle all preflight OPTIONS requests
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // Preflight requests use same config
 
 // API routes
 app.use("/api", apiRouter);
