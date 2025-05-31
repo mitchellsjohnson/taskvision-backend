@@ -1,11 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaskVision backend
+Description: TaskVision backend infrastructure
 
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 10
     Runtime: nodejs18.x
+    MemorySize: 128
     Architectures:
       - x86_64
 
@@ -22,53 +23,49 @@ Parameters:
     Type: String
   Auth0Audience:
     Type: String
+  CertificateArn:
+    Type: String
+    Description: ARN of the existing ACM certificate
 
 Resources:
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/index.handler
       CodeUri: .
+      Handler: src/lambda.handler
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
+          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
           AUTH0_DOMAIN: !Ref Auth0Domain
           AUTH0_AUDIENCE: !Ref Auth0Audience
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TableName
       Events:
-        Api:
+        ProxyApi:
           Type: Api
           Properties:
             Path: /{proxy+}
             Method: ANY
-
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: Prod
-      Cors:
-        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
-        AllowOrigin: !Ref ClientOriginUrl
+        RootApi:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
 
   CustomDomain:
     Type: AWS::ApiGateway::DomainName
     Properties:
       DomainName: !Ref CustomDomainName
+      CertificateArn: !Ref CertificateArn
       EndpointConfiguration:
-        Types: [REGIONAL]
-      RegionalCertificateArn:
-        Fn::ImportValue: CertificateArn  # or use an explicit ARN if preferred
-      SecurityPolicy: TLS_1_2
+        Types:
+          - EDGE
 
   BasePathMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties:
       DomainName: !Ref CustomDomain
-      RestApiId: !Ref ApiGateway
+      RestApiId: !Ref ServerlessRestApi
       Stage: Prod
 
   Route53Record:
@@ -78,10 +75,13 @@ Resources:
       Name: !Ref CustomDomainName
       Type: A
       AliasTarget:
-        DNSName: !GetAtt CustomDomain.RegionalDomainName
-        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+        DNSName: !GetAtt CustomDomain.DistributionDomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # This is the standard for CloudFront
 
 Outputs:
   ApiUrl:
-    Description: "API Gateway endpoint"
+    Description: API Gateway endpoint
     Value: !Sub "https://${CustomDomainName}/"
+  FunctionName:
+    Description: Name of Lambda function
+    Value: !Ref TaskVisionFunction
