@@ -1,6 +1,7 @@
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Backend API for TaskVision with custom domain and Route 53 support
+Description: Backend API for TaskVision
 
 Parameters:
   ClientOriginUrl:
@@ -15,7 +16,7 @@ Parameters:
   CustomDomainName:
     Type: String
     Default: api.taskvision.ai
-    Description: Custom domain for API Gateway
+    Description: Custom domain for API Gateway (already set up manually)
 
   HostedZoneId:
     Type: String
@@ -38,7 +39,7 @@ Resources:
         AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
         AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
         AllowOrigin: !Ref ClientOriginUrl
-        MaxAge: "86400"
+        MaxAge: 86400
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
@@ -76,32 +77,14 @@ Resources:
         - DomainName: !Ref CustomDomainName
           HostedZoneId: !Ref HostedZoneId
 
-  CustomDomain:
-    Type: AWS::ApiGateway::DomainName
-    Properties:
-      DomainName: !Ref CustomDomainName
-      RegionalCertificateArn: !Ref Certificate
-      EndpointConfiguration:
-        Types: [REGIONAL]
-
   BasePathMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties:
-      DomainName: !Ref CustomDomain
+      DomainName: !Ref CustomDomainName
       RestApiId: !Ref ApiGateway
       Stage: Prod
 
-  Route53Record:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneName: taskvision.ai.
-      Name: !Ref CustomDomainName
-      Type: A
-      AliasTarget:
-        DNSName: !GetAtt CustomDomain.RegionalDomainName
-        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
-
 Outputs:
   ApiUrl:
-    Description: "Deployed API Gateway custom domain"
+    Description: "Deployed API Gateway"
     Value: !Sub "https://${CustomDomainName}/"
