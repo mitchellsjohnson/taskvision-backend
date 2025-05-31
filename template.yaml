@@ -21,7 +21,6 @@ Parameters:
     Type: String
 
 Resources:
-
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -47,8 +46,8 @@ Resources:
 
 Outputs:
   ApiUrl:
-    Description: API Gateway endpoint (default)
+    Description: API Gateway endpoint
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   FunctionName:
-    Description: Name of Lambda function
+    Description: Lambda function name
     Value: !Ref TaskVisionFunction
