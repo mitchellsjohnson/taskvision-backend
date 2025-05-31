@@ -1,90 +1,87 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Backend API for TaskVision
+Description: TaskVision backend
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
 
 Parameters:
   ClientOriginUrl:
     Type: String
-    Default: '*'
-    Description: Allowed CORS origin URL
-
   TableName:
     Type: String
-    Description: Name of an existing DynamoDB table
-
   CustomDomainName:
     Type: String
-    Default: api.taskvision.ai
-    Description: Custom domain for API Gateway (already set up manually)
-
   HostedZoneId:
     Type: String
-    Description: Route 53 Hosted Zone ID for domain validation
-
   Auth0Domain:
     Type: String
-    Description: Auth0 domain
-
   Auth0Audience:
     Type: String
-    Description: Auth0 audience
 
 Resources:
+
+  TaskVisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/index.handler
+      CodeUri: .
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_AUDIENCE: !Ref Auth0Audience
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TableName
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
       Cors:
-        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
-        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
         AllowOrigin: !Ref ClientOriginUrl
-        MaxAge: 86400
 
-  TaskVisionFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: .
-      Handler: src/lambda.handler
-      Runtime: nodejs18.x
-      Architectures: [x86_64]
-      MemorySize: 128
-      Timeout: 30
-      Environment:
-        Variables:
-          TABLE_NAME: !Ref TableName
-          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-          AUTH0_DOMAIN: !Ref Auth0Domain
-          AUTH0_AUDIENCE: !Ref Auth0Audience
-          NODE_ENV: "production"
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TableName
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /{proxy+}
-            Method: ANY
-
-  Certificate:
-    Type: AWS::CertificateManager::Certificate
+  CustomDomain:
+    Type: AWS::ApiGateway::DomainName
     Properties:
       DomainName: !Ref CustomDomainName
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Ref CustomDomainName
-          HostedZoneId: !Ref HostedZoneId
+      EndpointConfiguration:
+        Types: [REGIONAL]
+      RegionalCertificateArn:
+        Fn::ImportValue: CertificateArn  # or use an explicit ARN if preferred
+      SecurityPolicy: TLS_1_2
 
   BasePathMapping:
     Type: AWS::ApiGateway::BasePathMapping
     Properties:
-      DomainName: !Ref CustomDomainName
+      DomainName: !Ref CustomDomain
       RestApiId: !Ref ApiGateway
       Stage: Prod
 
+  Route53Record:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref CustomDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt CustomDomain.RegionalHostedZoneId
+
 Outputs:
   ApiUrl:
-    Description: "Deployed API Gateway"
+    Description: "API Gateway endpoint"
     Value: !Sub "https://${CustomDomainName}/"
