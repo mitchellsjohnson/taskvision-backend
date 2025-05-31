@@ -35,16 +35,18 @@ jobs:
         id: hostedzone
         run: |
           if [ -z "${{ secrets.HOSTED_ZONE_ID }}" ]; then
-            echo "HOSTED_ZONE_ID not set in secrets. Attempting to fetch..."
+            echo "HOSTED_ZONE_ID not set, getting from AWS..."
             ZONE_ID=$(aws route53 list-hosted-zones --query "HostedZones[?Name=='taskvision.ai.'].Id" --output text | sed 's/\/hostedzone\///')
             if [ -z "$ZONE_ID" ]; then
               echo "❌ Failed to get Hosted Zone ID"
               exit 1
             fi
+            echo "✅ Found Hosted Zone ID: $ZONE_ID"
             echo "zone_id=$ZONE_ID" >> $GITHUB_OUTPUT
           else
-            echo "Using Hosted Zone ID from secrets"
+            echo "✅ Using provided Hosted Zone ID"
             echo "zone_id=${{ secrets.HOSTED_ZONE_ID }}" >> $GITHUB_OUTPUT
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -54,4 +56,17 @@ jobs:
           sam deploy \
             --stack-name taskvision-backend \
             --region $AWS_REGION \
-            --capabilities CAPABILITY_IAM \_
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} \
+              TableName=${{ secrets.TABLE_NAME }} \
+              CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
+              HostedZoneId=${{ steps.hostedzone.outputs.zone_id }} \
+              Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
+              Auth0Audience=${{ secrets.AUTH0_AUDIENCE }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
