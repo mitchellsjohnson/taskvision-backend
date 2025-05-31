@@ -5,12 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "cross-env NODE_ENV=development ts-node src/index.ts",
-    "start:dev": "cross-env NODE_ENV=development dotenv -e .env.dev ts-node src/index.ts",
-    "start:prod": "cross-env NODE_ENV=production dotenv -e .env.prod ts-node src/index.ts",
     "dev": "ts-node-dev --respawn --pretty --transpile-only src/index.ts",
     "build": "tsc",
-    "build:dev": "cross-env NODE_ENV=development tsc",
-    "build:prod": "cross-env NODE_ENV=production tsc",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
