@@ -2,37 +2,22 @@ name: Deploy Backend
 
 on:
   push:
-    branches: [main]
-    paths:
-      - '**'
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   deploy:
-    name: Deploy to AWS SAM
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Install backend dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: npm install
         working-directory: .
 
       - name: Build SAM application
@@ -51,7 +36,8 @@ jobs:
               ClientOriginUrl=https://${{ secrets.DOMAIN_NAME }} \
               TableName=${{ secrets.TABLE_NAME }} \
               CustomDomainName=${{ secrets.CUSTOM_DOMAIN_NAME }} \
-              CertificateArn=${{ secrets.CERTIFICATE_ARN }} \
-              AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }} \
-              AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+              HostedZoneId=${{ secrets.HOSTED_ZONE_ID }}
         working-directory: .
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
