@@ -26,6 +26,10 @@ jobs:
         run: npm install
         working-directory: .
 
+      - name: Clean SAM build cache
+        run: rm -rf .aws-sam
+        working-directory: .
+
       - name: Build SAM application
         run: sam build
         working-directory: .
