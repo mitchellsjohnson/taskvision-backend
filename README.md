@@ -1,3 +1,69 @@
+# TaskVision Backend
+
+Backend API for TaskVision with custom domain and Route 53 support.
+
+Last build: 2024-03-21 15:30 UTC
+
+## Prerequisites
+
+- Node.js 18.x
+- AWS SAM CLI
+- AWS CLI configured with appropriate credentials
+
+## Development
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start local development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Run tests:
+   ```bash
+   npm test
+   ```
+
+## Deployment
+
+The backend is automatically deployed via GitHub Actions when changes are pushed to the main branch.
+
+### Manual Deployment
+
+To deploy manually:
+
+1. Build the application:
+   ```bash
+   npm run build
+   sam build
+   ```
+
+2. Deploy to AWS:
+   ```bash
+   sam deploy --guided
+   ```
+
+## Environment Variables
+
+The following environment variables are required:
+
+- `TABLE_NAME`: Name of the DynamoDB table
+- `CLIENT_ORIGIN_URL`: Allowed CORS origin URL
+- `AUTH0_DOMAIN`: Auth0 domain
+- `AUTH0_AUDIENCE`: Auth0 audience
+- `NODE_ENV`: Environment (development/production)
+
+## API Documentation
+
+The API is available at `https://api.taskvision.ai` when deployed.
+
+## License
+
+MIT
+
 ## 🧪 Local Development & Deployment (Backend)
 
 To test and deploy your backend locally using AWS SAM:
