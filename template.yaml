@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaskVision backend - deploys only Lambda + API Gateway with proper CORS
+Description: TaskVision backend - deploys Lambda + API Gateway with proper CORS
 
 Globals:
   Function:
@@ -21,11 +21,22 @@ Parameters:
     Type: String
 
 Resources:
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
+        AllowOrigin: !Sub "'${ClientOriginUrl}'"
+        AllowCredentials: true
+        MaxAge: "'86400'"
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
-      Handler: src/lambda.handler
+      Handler: src/lambda.main  # <-- matches `export const main` in lambda.ts
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
@@ -36,19 +47,14 @@ Resources:
         ProxyApi:
           Type: Api
           Properties:
+            RestApiId: !Ref ApiGateway
             Path: /{proxy+}
             Method: ANY
-            Cors:
-              AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-              AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
-              AllowOrigin: !Sub "'${ClientOriginUrl}'"
-              AllowCredentials: true
-              MaxAge: "'86400'"
 
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint (default)
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   FunctionName:
     Description: Name of Lambda function
     Value: !Ref TaskVisionFunction
