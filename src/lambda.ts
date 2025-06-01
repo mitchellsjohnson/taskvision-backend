@@ -1,19 +1,30 @@
 import serverless from 'serverless-http';
-import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
+import type { Request } from 'express';
+import type {
+  APIGatewayProxyEvent,
+  Context,
+  APIGatewayProxyResult,
+} from 'aws-lambda';
 import { app } from './index';
 
+// Wrap Express app in serverless handler
 const handler = serverless(app, {
-  request: (req, event, context) => {
+  request: (
+    req: Request,
+    event: APIGatewayProxyEvent,
+    context: Context
+  ): void => {
     req.headers['x-apigateway-event'] = JSON.stringify(event);
     req.headers['x-apigateway-context'] = JSON.stringify(context);
   },
 });
 
+// Main Lambda entry point
 export const main = async (
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
-  // Handle CORS preflight manually
+  // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -28,6 +39,6 @@ export const main = async (
     };
   }
 
-  // All other requests go through Express
+  // Pass through to Express app
   return (await handler(event, context)) as APIGatewayProxyResult;
 };
