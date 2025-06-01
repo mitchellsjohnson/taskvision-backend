@@ -22,6 +22,9 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Install esbuild
+        run: npm install -g esbuild
+        
       - name: Install dependencies
         run: npm ci
 
