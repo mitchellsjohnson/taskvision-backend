@@ -36,7 +36,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
-      Handler: lambda.main  # <-- matches `export const main` in lambda.ts
+      Handler: src/lambda.main  # <-- matches `export const main` in lambda.ts
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
