@@ -35,8 +35,8 @@ Resources:
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .
-      Handler: src/lambda.main  # <-- matches `export const main` in lambda.ts
+      CodeUri: ./
+      Handler: lambda.main  # matches export const main = ...
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
@@ -50,6 +50,16 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /{proxy+}
             Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/lambda.ts
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        External:
+          - aws-sdk
 
 Outputs:
   ApiUrl:
