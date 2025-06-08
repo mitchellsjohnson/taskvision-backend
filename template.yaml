@@ -17,6 +17,11 @@ Parameters:
     Type: String
   Auth0Audience:
     Type: String
+  TableName:
+    Type: String
+  Version:
+    Type: String
+    Default: "1.0.0"
 
 Resources:
   ApiGateway:
@@ -30,48 +35,21 @@ Resources:
         AllowCredentials: true
         MaxAge: "'86400'"
 
-  TaskVisionTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      AttributeDefinitions:
-        - AttributeName: PK
-          AttributeType: S
-        - AttributeName: SK
-          AttributeType: S
-        - AttributeName: GSI1PK
-          AttributeType: S
-        - AttributeName: GSI1SK
-          AttributeType: S
-      KeySchema:
-        - AttributeName: PK
-          KeyType: HASH
-        - AttributeName: SK
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: GSI1
-          KeySchema:
-            - AttributeName: GSI1PK
-              KeyType: HASH
-            - AttributeName: GSI1SK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      BillingMode: PAY_PER_REQUEST
-
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
-      Handler: lambda.main  # matches export const main = ...
+      Handler: lambda.main
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref TaskVisionTable
+            TableName: !Ref TableName
       Environment:
         Variables:
-          TABLE_NAME: !Ref TaskVisionTable
+          TABLE_NAME: !Ref TableName
           CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
           AUTH0_DOMAIN: !Ref Auth0Domain
           AUTH0_AUDIENCE: !Ref Auth0Audience
+          VERSION: !Ref Version
       Events:
         ProxyApi:
           Type: Api
