@@ -37,7 +37,7 @@ jobs:
 
       - name: Build and Deploy Backend with SAM
         run: |
-          sam build --template template.yaml --use-container
+          sam build --template template.yaml
           sam deploy \
             --template template.yaml \
             --stack-name taskvision-dev-stack \
