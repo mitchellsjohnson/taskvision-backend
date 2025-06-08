@@ -5,14 +5,11 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "DISABLE_AUTH=true ts-node-dev --require dotenv/config --respawn --pretty --transpile-only src/index.ts",
-    "build": "tsc && npm run copy-files",
-    "copy-files": "mkdir -p .aws-sam/build/TaskVisionFunction && cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/ && cd .aws-sam/build/TaskVisionFunction && npm install --production",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "sam:build": "npm run build && sam build",
-    "sam:deploy": "sam deploy --guided",
-    "sam:local": "sam local start-api"
+    "sam:local": "sam local start-api",
+    "create-table": "ts-node scripts/create-table.ts"
   },
   "keywords": [],
   "author": "",

@@ -35,14 +35,27 @@ Resources:
         AllowCredentials: true
         MaxAge: "'86400'"
 
+  TaskVisionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub "taskvision-backend-${Version}"
       CodeUri: ./
       Handler: lambda.main
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TableName
+      Role: !GetAtt TaskVisionFunctionRole.Arn
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
@@ -50,6 +63,8 @@ Resources:
           AUTH0_DOMAIN: !Ref Auth0Domain
           AUTH0_AUDIENCE: !Ref Auth0Audience
           VERSION: !Ref Version
+      Tags:
+        Version: !Ref Version
       Events:
         ProxyApi:
           Type: Api

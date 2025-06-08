@@ -7,6 +7,8 @@ import {
 import { ulid } from "ulid";
 import docClient from "./dynamo";
 
+const TABLE_NAME = process.env.TABLE_NAME || "taskvision-prod";
+
 interface TaskInput {
   title: string;
   description?: string;
@@ -29,7 +31,7 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
   };
 
   const command = new PutCommand({
-    TableName: "TaskVision", // Assuming a single table named "TaskVision"
+    TableName: TABLE_NAME,
     Item: task,
   });
 
@@ -44,7 +46,7 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
 
 export const getTasksForUser = async (userId: string) => {
   const command = new QueryCommand({
-    TableName: "TaskVision",
+    TableName: TABLE_NAME,
     KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
     ExpressionAttributeValues: {
       ":pk": `USER#${userId}`,
@@ -93,7 +95,7 @@ export const updateTask = async (
   expressionAttributeValues[":updatedAt"] = new Date().toISOString();
 
   const command = new UpdateCommand({
-    TableName: "TaskVision",
+    TableName: TABLE_NAME,
     Key: {
       PK: `USER#${userId}`,
       SK: `TASK#${taskId}`,
@@ -115,7 +117,7 @@ export const updateTask = async (
 
 export const deleteTask = async (userId: string, taskId: string) => {
   const command = new DeleteCommand({
-    TableName: "TaskVision",
+    TableName: TABLE_NAME,
     Key: {
       PK: `USER#${userId}`,
       SK: `TASK#${taskId}`,
