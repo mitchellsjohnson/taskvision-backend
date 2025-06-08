@@ -4,8 +4,7 @@
   "description": "Auth0 Express.js API code sample with TypeScript",
   "main": "src/index.ts",
   "scripts": {
-    "start": "cross-env NODE_ENV=development ts-node src/index.ts",
-    "dev": "ts-node-dev --respawn --pretty --transpile-only src/index.ts",
+    "start": "DISABLE_AUTH=true ts-node-dev --require dotenv/config --respawn --pretty --transpile-only src/index.ts",
     "build": "tsc && npm run copy-files",
     "copy-files": "mkdir -p .aws-sam/build/TaskVisionFunction && cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/ && cd .aws-sam/build/TaskVisionFunction && npm install --production",
     "test": "jest",
@@ -19,6 +18,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.826.0",
+    "@aws-sdk/lib-dynamodb": "^3.826.0",
     "aws-lambda": "^1.0.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
@@ -29,7 +30,8 @@
     "helmet": "^5.1.1",
     "jwks-rsa": "^3.1.0",
     "nocache": "^3.0.4",
-    "serverless-http": "^3.2.0"
+    "serverless-http": "^3.2.0",
+    "ulid": "^3.0.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.149",

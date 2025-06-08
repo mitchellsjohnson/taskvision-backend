@@ -1,18 +1,29 @@
 import * as dotenv from "dotenv";
-dotenv.config(); // Ensure env vars are loaded early
+dotenv.config({ path: ".env.local" });
 
 import express, { Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import nocache from "nocache";
 import cors from "cors";
-import "./loadEnv";
 import { messagesRouter } from "./messages/messages.router";
+import { tasksRouter } from "./tasks/tasks.router";
 import { errorHandler } from "./middleware/error.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 
 // Validate required env vars
-const PORT = parseInt(process.env.PORT || "3000", 10);
-const CLIENT_ORIGIN_URL = process.env.CLIENT_ORIGIN_URL;
+const PORT = parseInt(process.env.PORT || "6060", 10);
+let CLIENT_ORIGIN_URL = process.env.CLIENT_ORIGIN_URL;
+
+if (process.env.DISABLE_AUTH === 'true') {
+  // No need to log this in production
+  // console.log(`Loaded env config from .env.local`);
+  // console.log("Offline mode detected.");
+}
+
+if (process.env.NODE_ENV !== 'production' && !CLIENT_ORIGIN_URL) {
+  console.warn('CLIENT_ORIGIN_URL not set, defaulting to http://localhost:4040 for local development.');
+  CLIENT_ORIGIN_URL = 'http://localhost:4040';
+}
 
 if (!CLIENT_ORIGIN_URL) {
   throw new Error("Missing CLIENT_ORIGIN_URL environment variable.");
@@ -70,6 +81,7 @@ app.use(nocache());
 // Routes
 app.use("/api", apiRouter);
 apiRouter.use("/messages", messagesRouter);
+apiRouter.use("/tasks", tasksRouter);
 
 // Error handling
 app.use(errorHandler);
@@ -77,7 +89,15 @@ app.use(notFoundHandler);
 
 // Local dev server (skipped in tests or Lambda)
 if (process.env.NODE_ENV !== "test") {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Listening on port ${PORT}`);
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server');
+    server.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
   });
 }

@@ -7,7 +7,8 @@ import { Request, Response, NextFunction } from 'express';
 const jwtCheck =
   process.env.DISABLE_AUTH === 'true'
     ? (req: Request, res: Response, next: NextFunction) => {
-        console.warn('[Auth Bypassed] DISABLE_AUTH=true');
+        // No need to log this in production
+        // console.warn('[Auth Bypassed] DISABLE_AUTH=true');
         next();
       }
     : auth({
@@ -21,7 +22,8 @@ const checkRequiredPermissions =
   (permissions: string[]) =>
   (req: Request, res: Response, next: NextFunction) => {
     if (process.env.DISABLE_AUTH === 'true') {
-      console.warn('[Permission Bypassed] DISABLE_AUTH=true');
+      // No need to log this in production
+      // console.warn('[Permission Bypassed] DISABLE_AUTH=true');
       return next();
     }
 
