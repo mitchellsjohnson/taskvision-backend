@@ -30,16 +30,16 @@ jobs:
 
       # Backend Deployment
       - name: Install backend dependencies
-        run: npm install --prefix taskvision-backend
+        run: npm install
 
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
 
       - name: Build and Deploy Backend with SAM
         run: |
-          sam build --template taskvision-backend/template.yaml --use-container
+          sam build --template template.yaml --use-container
           sam deploy \
-            --template taskvision-backend/template.yaml \
+            --template template.yaml \
             --stack-name taskvision-dev-stack \
             --capabilities CAPABILITY_IAM \
             --region us-east-1 \
