@@ -45,9 +45,9 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} \
-              TableName=${{ secrets.TABLE_NAME }} \
               Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
-              Auth0Audience=${{ secrets.AUTH0_AUDIENCE }}
+              Auth0Audience=${{ secrets.AUTH0_AUDIENCE }} \
+              TableName=${{ secrets.TABLE_NAME }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
