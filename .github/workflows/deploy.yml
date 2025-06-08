@@ -1,55 +1,76 @@
-name: Deploy Backend
+name: Deploy to Dev
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main # Or your development branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 # Or your preferred region
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      - name: Install esbuild
-        run: npm install -g esbuild
-        
-      - name: Install dependencies
-        run: npm ci
+      # Backend Deployment
+      - name: Install backend dependencies
+        run: npm install --prefix taskvision-backend
 
-      - name: Clean previous SAM build
-        run: rm -rf .aws-sam
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
 
-      - name: Build SAM application
-        run: sam build
-
-      - name: Deploy to AWS
+      - name: Build and Deploy Backend with SAM
         run: |
+          sam build --template taskvision-backend/template.yaml --use-container
           sam deploy \
-            --stack-name taskvision-backend \
-            --region $AWS_REGION \
+            --template taskvision-backend/template.yaml \
+            --stack-name taskvision-dev-stack \
             --capabilities CAPABILITY_IAM \
-            --resolve-s3 \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset \
-            --force-upload \
+            --region us-east-1 \
+            --s3-bucket YOUR_S3_BUCKET_FOR_SAM_ARTIFACTS \
             --parameter-overrides \
-              ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} \
               Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
               Auth0Audience=${{ secrets.AUTH0_AUDIENCE }} \
-              TableName=${{ secrets.TABLE_NAME }} \
-              Version=$(date +%s)
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+              ClientOriginUrl=http://YOUR_S3_BUCKET_FOR_FRONTEND.s3-website-us-east-1.amazonaws.com \
+            --no-fail-on-empty-changeset
+
+      - name: Get Backend API URL
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name taskvision-dev-stack \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+            --output text \
+            --region us-east-1)
+          echo "API_URL=$API_URL" >> $GITHUB_ENV
+
+      # Frontend Deployment
+      - name: Install frontend dependencies
+        run: npm install --prefix taskvision-frontend
+
+      - name: Build frontend
+        run: |
+          echo "REACT_APP_API_SERVER_URL=${{ env.API_URL }}" > taskvision-frontend/.env
+          echo "REACT_APP_AUTH0_DOMAIN=${{ secrets.REACT_APP_AUTH0_DOMAIN }}" >> taskvision-frontend/.env
+          echo "REACT_APP_AUTH0_CLIENT_ID=${{ secrets.REACT_APP_AUTH0_CLIENT_ID }}" >> taskvision-frontend/.env
+          echo "REACT_APP_AUTH0_AUDIENCE=${{ secrets.REACT_APP_AUTH0_AUDIENCE }}" >> taskvision-frontend/.env
+          npm run build --prefix taskvision-frontend
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync taskvision-frontend/build s3://YOUR_S3_BUCKET_FOR_FRONTEND --delete 
