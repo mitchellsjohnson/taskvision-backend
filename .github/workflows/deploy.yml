@@ -43,6 +43,7 @@ jobs:
             --resolve-s3 \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
+            --force-upload \
             --parameter-overrides \
               ClientOriginUrl=${{ secrets.CLIENT_ORIGIN_URL }} \
               Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
