@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: TaskVision backend - deploys Lambda + API Gateway with proper CORS and DynamoDB access
 
-# Triggering fresh deployment after stack cleanup
+# Deploying fresh stack after cleanup
 Globals:
   Function:
     Timeout: 10
