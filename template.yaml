@@ -14,15 +14,20 @@ Globals:
 Parameters:
   ClientOriginUrl:
     Type: String
+    Description: The URL of the frontend application
   Auth0Domain:
     Type: String
+    Description: The Auth0 domain
   Auth0Audience:
     Type: String
+    Description: The Auth0 audience
   TableName:
     Type: String
+    Description: The name of the DynamoDB table
   Version:
     Type: String
-    Default: "1.0.0"
+    Description: Version of the deployment
+    Default: latest
 
 Resources:
   ApiGateway:
@@ -36,13 +41,40 @@ Resources:
         AllowCredentials: true
         MaxAge: "'86400'"
 
+  TaskVisionFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+
   TaskVisionFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "taskvision-backend-${Version}"
       CodeUri: ./
       Handler: lambda.main
-      Role: "arn:aws:iam::058264546641:role/taskvision-backend-TaskVisionFunctionRole-TtApDPaTTrvS"
+      Role: !GetAtt TaskVisionFunctionRole.Arn
       Environment:
         Variables:
           TABLE_NAME: !Ref TableName
@@ -77,3 +109,6 @@ Outputs:
   FunctionName:
     Description: Name of Lambda function
     Value: !Ref TaskVisionFunction
+  FunctionRole:
+    Description: Lambda function role ARN
+    Value: !GetAtt TaskVisionFunctionRole.Arn
