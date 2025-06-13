@@ -18,109 +18,135 @@ jest.mock("@aws-sdk/lib-dynamodb", () => ({
   DeleteCommand: jest.fn(),
 }));
 
-import { createTask, getTasksForUser, updateTask, deleteTask } from "./task-operations";
+import {
+  createTask,
+  getTasksForUser,
+  updateTask,
+  deleteTask,
+} from "./task-operations";
 
 describe("Task Operations", () => {
-  let createdTaskId: string;
-
-  // Test data
-  const testTask = {
-    title: "Test Task",
-    description: "This is a test task",
-  };
-
-  const updatedTask = {
-    title: "Updated Test Task",
-    description: "This is an updated test task",
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    createdTaskId = "test-task-123";
   });
 
-  describe("Create Task", () => {
+  describe("createTask", () => {
     it("should create a new task", async () => {
-      const mockResponse = {
-        Attributes: {
-          TaskId: createdTaskId,
-          title: testTask.title,
-          description: testTask.description,
-          UserId: "test-user-id",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
+      const testTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Open" as const,
       };
-      mockSend.mockResolvedValueOnce(mockResponse);
+
+      mockSend.mockResolvedValueOnce({});
 
       const task = await createTask("test-user-id", testTask);
 
       expect(task).toBeDefined();
       expect(task.title).toBe(testTask.title);
       expect(task.description).toBe(testTask.description);
+      expect(task.status).toBe(testTask.status);
+      expect(task.creationDate).toBeDefined();
+      expect(task.modifiedDate).toBeDefined();
+      expect(task.completedDate).toBeNull();
       expect(task.UserId).toBe("test-user-id");
-      expect(typeof task.TaskId).toBe("string");
-      expect(task.TaskId).toBeDefined();
-      expect(task.createdAt).toBeDefined();
-      expect(task.updatedAt).toBeDefined();
     });
-  });
 
-  describe("Get Tasks", () => {
-    it("should retrieve tasks for a user", async () => {
-      const mockResponse = {
-        Items: [
-          {
-            TaskId: createdTaskId,
-            title: testTask.title,
-            description: testTask.description,
-            UserId: "test-user-id",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
+    it("should set completedDate when status is Completed", async () => {
+      const testTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Completed" as const,
       };
-      mockSend.mockResolvedValueOnce(mockResponse);
 
-      const tasks = await getTasksForUser("test-user-id") || [];
+      mockSend.mockResolvedValueOnce({});
 
-      expect(Array.isArray(tasks)).toBe(true);
-      expect(tasks.length).toBe(1);
-      expect(tasks[0].TaskId).toBe(createdTaskId);
-      expect(tasks[0].title).toBe(testTask.title);
-      expect(tasks[0].description).toBe(testTask.description);
+      const task = await createTask("test-user-id", testTask);
+
+      expect(task.completedDate).toBeDefined();
+      expect(task.status).toBe("Completed");
     });
   });
 
-  describe("Update Task", () => {
-    it("should update an existing task", async () => {
-      const mockResponse = {
-        Attributes: {
-          TaskId: createdTaskId,
-          title: updatedTask.title,
-          description: updatedTask.description,
-          UserId: "test-user-id",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+  describe("getTasksForUser", () => {
+    it("should return tasks for a user", async () => {
+      const mockTasks = [
+        {
+          PK: "USER#test-user-id",
+          SK: "TASK#1",
+          title: "Task 1",
+          status: "Open",
         },
-      };
-      mockSend.mockResolvedValueOnce(mockResponse);
+        {
+          PK: "USER#test-user-id",
+          SK: "TASK#2",
+          title: "Task 2",
+          status: "Completed",
+        },
+      ];
 
-      const updatedTaskResult = await updateTask("test-user-id", createdTaskId, updatedTask);
+      mockSend.mockResolvedValueOnce({ Items: mockTasks });
 
-      expect(updatedTaskResult).toBeDefined();
-      expect(updatedTaskResult?.title).toBe(updatedTask.title);
-      expect(updatedTaskResult?.description).toBe(updatedTask.description);
-      expect(updatedTaskResult?.updatedAt).toBeDefined();
+      const tasks = await getTasksForUser("test-user-id");
+
+      expect(tasks).toEqual(mockTasks);
     });
   });
 
-  describe("Delete Task", () => {
+  describe("updateTask", () => {
+    it("should update a task", async () => {
+      const updateData = {
+        title: "Updated Title",
+        status: "Completed" as const,
+      };
+
+      const mockUpdatedTask = {
+        ...updateData,
+        description: "Test Description",
+        creationDate: new Date().toISOString(),
+        modifiedDate: new Date().toISOString(),
+        completedDate: new Date().toISOString(),
+      };
+
+      mockSend.mockResolvedValueOnce({ Attributes: mockUpdatedTask });
+
+      const updatedTask = await updateTask("test-user-id", "task-1", updateData) as typeof mockUpdatedTask;
+
+      expect(updatedTask).toEqual(mockUpdatedTask);
+    });
+
+    it("should clear completedDate when status changes from Completed", async () => {
+      const updateData = {
+        status: "Open" as const,
+      };
+
+      const mockUpdatedTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Open",
+        creationDate: new Date().toISOString(),
+        modifiedDate: new Date().toISOString(),
+        completedDate: null,
+      };
+
+      mockSend.mockResolvedValueOnce({ Attributes: mockUpdatedTask });
+
+      const updatedTask = await updateTask("test-user-id", "task-1", updateData) as typeof mockUpdatedTask;
+
+      expect(updatedTask.completedDate).toBeNull();
+    });
+  });
+
+  describe("deleteTask", () => {
     it("should delete a task", async () => {
       mockSend.mockResolvedValueOnce({});
 
-      const result = await deleteTask("test-user-id", createdTaskId);
-      expect(result.success).toBe(true);
+      const result = await deleteTask("test-user-id", "task-1");
+
+      expect(result).toEqual({
+        success: true,
+        message: "Task deleted successfully",
+      });
     });
   });
 }); 

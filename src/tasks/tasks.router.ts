@@ -9,24 +9,22 @@ import {
 
 export const tasksRouter = express.Router();
 
-// Helper to get user ID from the request
-const getUserId = (req: Request) => {
-  if (process.env.DISABLE_AUTH === 'true') {
-    // When auth is disabled, return a mock user ID for testing
-    return 'auth0|MOCK_USER_ID';
-  }
-  // The 'sub' property on req.auth.payload is the user ID from the JWT
-  if (req.auth && req.auth.payload && req.auth.payload.sub) {
-    return req.auth.payload.sub;
-  }
-  throw new Error("User ID not found in request");
+const getUserId = (req: Request): string => {
+  return req.auth?.payload.sub || "";
 };
 
 // GET /api/tasks
 tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const tasks = await getTasksForUser(userId);
+    const { status, tags, search } = req.query;
+
+    const filters: any = {};
+    if (status) filters.status = (status as string).split(",");
+    if (tags) filters.tags = (tags as string).split(",");
+    if (search) filters.search = search as string;
+
+    const tasks = await getTasksForUser(userId, filters);
     res.status(200).json(tasks);
   } catch (error) {
     console.error(error);
@@ -38,11 +36,17 @@ tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) =>
 tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const { title, description } = req.body;
+    const { title, description, dueDate, status } = req.body;
+
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
     }
-    const newTask = await createTask(userId, { title, description });
+
+    if (!status || !["Open", "Completed", "Canceled", "Waiting"].includes(status)) {
+      return res.status(400).json({ message: "Status must be Open, Completed, or Canceled" });
+    }
+
+    const newTask = await createTask(userId, { title, description, dueDate, status });
     res.status(201).json(newTask);
   } catch (error) {
     console.error(error);
@@ -55,11 +59,18 @@ tasksRouter.put("/:taskId", validateAccessToken, async (req: Request, res: Respo
   try {
     const userId = getUserId(req);
     const { taskId } = req.params;
-    const { title, description } = req.body;
-    const updatedTask = await updateTask(userId, taskId, { title, description });
+    const taskData = req.body;
+
+    if (taskData.status && !["Open", "Completed", "Canceled", "Waiting"].includes(taskData.status)) {
+      return res.status(400).json({ message: "Status must be Open, Completed, or Canceled" });
+    }
+
+    const updatedTask = await updateTask(userId, taskId, taskData);
+
     if (!updatedTask) {
       return res.status(404).json({ message: "Task not found" });
     }
+
     res.status(200).json(updatedTask);
   } catch (error) {
     console.error(error);

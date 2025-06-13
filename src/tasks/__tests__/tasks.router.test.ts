@@ -49,19 +49,25 @@ describe("Tasks API", () => {
       expect(res.statusCode).toEqual(200);
       expect(res.body).toEqual(mockTasks);
       expect(mockedTaskOperations.getTasksForUser).toHaveBeenCalledWith(
-        "test-user-id"
+        "test-user-id",
+        {}
       );
     });
   });
 
   describe("POST /api/tasks", () => {
     it("should create a new task and return it with a 201 status code", async () => {
-      const newTaskData = { title: "New Task", description: "A description" };
+      const newTaskData = { 
+        title: "New Task", 
+        description: "A description",
+        status: "Open" as const
+      };
       const createdTask = {
         TaskId: "2",
         ...newTaskData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        creationDate: new Date().toISOString(),
+        modifiedDate: new Date().toISOString(),
+        completedDate: null,
         PK: "USER#test-user-id",
         SK: "TASK#2",
         GSI1PK: "USER#test-user-id",
@@ -82,35 +88,67 @@ describe("Tasks API", () => {
     });
 
     it("should return a 400 status code if title is missing", async () => {
-        const res = await request(app).post("/api/tasks").send({ description: "No title" });
-        expect(res.statusCode).toEqual(400);
+      const res = await request(app).post("/api/tasks").send({ 
+        description: "No title",
+        status: "Open" as const
+      });
+      expect(res.statusCode).toEqual(400);
+    });
+
+    it("should return a 400 status code if status is missing", async () => {
+      const res = await request(app).post("/api/tasks").send({ 
+        title: "No status",
+        description: "A description"
+      });
+      expect(res.statusCode).toEqual(400);
+    });
+
+    it("should return a 400 status code if status is invalid", async () => {
+      const res = await request(app).post("/api/tasks").send({ 
+        title: "Invalid status",
+        description: "A description",
+        status: "Invalid" as any
+      });
+      expect(res.statusCode).toEqual(400);
     });
   });
 
   describe("PUT /api/tasks/:taskId", () => {
     it("should update a task and return it with a 200 status code", async () => {
-        const taskId = "1";
-        const updateData = { title: "Updated Title" };
-        const updatedTask = {
-          TaskId: taskId,
-          ...updateData,
-          description: "A description",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          PK: "USER#test-user-id",
-          SK: "TASK#1",
-          GSI1PK: "USER#test-user-id",
-          GSI1SK: "TASK#1",
-          EntityType: "Task",
-          UserId: "test-user-id",
-        };
-        mockedTaskOperations.updateTask.mockResolvedValue(updatedTask as any);
+      const taskId = "1";
+      const updateData = { 
+        title: "Updated Title",
+        status: "Completed" as const
+      };
+      const updatedTask = {
+        TaskId: taskId,
+        ...updateData,
+        description: "A description",
+        creationDate: new Date().toISOString(),
+        modifiedDate: new Date().toISOString(),
+        completedDate: new Date().toISOString(),
+        PK: "USER#test-user-id",
+        SK: "TASK#1",
+        GSI1PK: "USER#test-user-id",
+        GSI1SK: "TASK#1",
+        EntityType: "Task",
+        UserId: "test-user-id",
+      };
+      mockedTaskOperations.updateTask.mockResolvedValue(updatedTask as any);
 
-        const res = await request(app).put(`/api/tasks/${taskId}`).send(updateData);
+      const res = await request(app).put(`/api/tasks/${taskId}`).send(updateData);
 
-        expect(res.statusCode).toEqual(200);
-        expect(res.body).toEqual(updatedTask);
-        expect(mockedTaskOperations.updateTask).toHaveBeenCalledWith("test-user-id", taskId, updateData);
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(updatedTask);
+      expect(mockedTaskOperations.updateTask).toHaveBeenCalledWith("test-user-id", taskId, updateData);
+    });
+
+    it("should return a 400 status code if status is invalid", async () => {
+      const taskId = "1";
+      const res = await request(app).put(`/api/tasks/${taskId}`).send({ 
+        status: "Invalid" as any
+      });
+      expect(res.statusCode).toEqual(400);
     });
   });
 
