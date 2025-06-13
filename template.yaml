@@ -10,13 +10,6 @@ Globals:
     MemorySize: 128
     Architectures:
       - x86_64
-    Environment:
-      Variables:
-        TABLE_NAME: !Ref TableName
-        CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
-        AUTH0_DOMAIN: !Ref Auth0Domain
-        AUTH0_AUDIENCE: !Ref Auth0Audience
-        VERSION: !Ref Version
 
 Parameters:
   ClientOriginUrl:
@@ -42,11 +35,11 @@ Resources:
     Properties:
       StageName: Prod
       Cors:
-        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
-        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With"
-        AllowOrigin: !Ref ClientOriginUrl
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
+        AllowOrigin: !Sub "'${ClientOriginUrl}'"
         AllowCredentials: true
-        MaxAge: "86400"
+        MaxAge: "'86400'"
 
   TaskVisionFunctionRole:
     Type: AWS::IAM::Role
@@ -82,6 +75,13 @@ Resources:
       CodeUri: ./
       Handler: lambda.main
       Role: !GetAtt TaskVisionFunctionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_AUDIENCE: !Ref Auth0Audience
+          VERSION: !Ref Version
       Tags:
         Version: !Ref Version
       Events:
