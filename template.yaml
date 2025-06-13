@@ -42,11 +42,11 @@ Resources:
     Properties:
       StageName: Prod
       Cors:
-        AllowMethods: "GET,POST,PUT,DELETE,OPTIONS"
-        AllowHeaders: "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Requested-With'"
         AllowOrigin: !Ref ClientOriginUrl
         AllowCredentials: true
-        MaxAge: 86400
+        MaxAge: "'86400'"
 
   TaskVisionFunctionRole:
     Type: AWS::IAM::Role
