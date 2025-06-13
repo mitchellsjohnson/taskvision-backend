@@ -17,6 +17,9 @@ const jwtCheck =
         tokenSigningAlg: 'RS256'
       });
 
+console.log('[AUTH0 MIDDLEWARE] Configured Audience:', process.env.AUTH0_AUDIENCE);
+console.log('[AUTH0 MIDDLEWARE] Configured Domain:', process.env.AUTH0_DOMAIN);
+
 // Permission checker middleware (stub, accepts permission array)
 const checkRequiredPermissions =
   (permissions: string[]) =>
