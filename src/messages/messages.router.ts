@@ -17,6 +17,7 @@ messagesRouter.get("/debug-env", (req, res) => {
   res.status(200).json({
     AUTH0_DOMAIN: process.env.AUTH0_DOMAIN || "Not Set",
     AUTH0_AUDIENCE: process.env.AUTH0_AUDIENCE || "Not Set",
+    CLIENT_ORIGIN_URL: process.env.CLIENT_ORIGIN_URL || "Not Set",
   });
 });
 
