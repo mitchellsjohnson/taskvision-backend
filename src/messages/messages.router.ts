@@ -21,15 +21,6 @@ messagesRouter.get("/debug-env", (req, res) => {
   });
 });
 
-// Handle CORS preflight requests
-messagesRouter.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', process.env.CLIENT_ORIGIN_URL);
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token');
-  res.header('Access-Control-Max-Age', '86400');
-  res.sendStatus(204);
-});
-
 messagesRouter.get("/public", (req, res) => {
   const message = getPublicMessage();
 
