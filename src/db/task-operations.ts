@@ -12,6 +12,9 @@ import { Task } from '../types';
 
 const TABLE_NAME = process.env.TABLE_NAME || "TaskVision";
 
+// A map to store promises for ongoing re-prioritization to avoid race conditions
+const userReprioritizationLocks = new Map<string, Promise<any>>();
+
 type TaskStatus = "Open" | "Completed" | "Canceled" | "Waiting";
 
 interface TaskInput {
@@ -22,6 +25,10 @@ interface TaskInput {
 }
 
 export const createTask = async (userId: string, taskData: TaskInput) => {
+  // First, get the current number of tasks to determine the new priority
+  const existingTasks = await getTasksForUser(userId);
+  const newPriority = (existingTasks?.length || 0) + 1;
+
   const taskId = ulid();
   const now = new Date().toISOString();
   
@@ -34,7 +41,7 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     TaskId: taskId,
     UserId: userId,
     isMIT: false,
-    priority: 999, // Default to last
+    priority: newPriority,
     ...taskData,
     tags: [], // Initialize with an empty array
     creationDate: now,
@@ -51,7 +58,6 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     await docClient.send(command);
     return task;
   } catch (error) {
-    console.error("Error creating task:", error);
     throw new Error("Could not create task.");
   }
 };
@@ -116,8 +122,6 @@ export const getTasksForUser = async (
     params.FilterExpression = filterExpressions.join(" AND ");
   }
 
-  console.log("[getTasksForUser] Querying with params:", JSON.stringify(params, null, 2));
-
   try {
     const result = await docClient.send(new QueryCommand(params));
     return result.Items;
@@ -127,9 +131,51 @@ export const getTasksForUser = async (
   }
 };
 
+export const reprioritizeTasks = async (userId: string) => {
+  const allTasks = await getTasksForUser(userId);
+
+  if (!allTasks) return;
+
+  const mitTasks = allTasks.filter(t => t.isMIT).sort((a, b) => a.priority - b.priority);
+  const litTasks = allTasks.filter(t => !t.isMIT).sort((a, b) => a.priority - b.priority);
+
+  let currentPriority = 1;
+  const promises = [];
+
+  for (const task of mitTasks) {
+    if (task.priority !== currentPriority) {
+      promises.push(updateTask(userId, task.TaskId, { priority: currentPriority }));
+    }
+    currentPriority++;
+  }
+
+  for (const task of litTasks) {
+    if (task.priority !== currentPriority) {
+      promises.push(updateTask(userId, task.TaskId, { priority: currentPriority }));
+    }
+    currentPriority++;
+  }
+
+  await Promise.all(promises);
+};
+
 export async function updateTask(userId: string, taskId: string, updateData: Partial<Task>): Promise<Task | null> {
-  console.log(`[updateTask] Starting update for userId: ${userId}, taskId: ${taskId}`);
-  console.log(`[updateTask] Received updateData:`, updateData);
+  const isReprioritizing = updateData.priority !== undefined && Object.keys(updateData).length === 1;
+
+  // If this is a priority-only update, we can skip the complex logic
+  if (isReprioritizing) {
+    // Simplified update for reprioritization calls to avoid loops
+    const priorityUpdateParams = {
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: `TASK#${taskId}` },
+      UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+      ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+      ExpressionAttributeValues: { ':priority': updateData.priority, ':modifiedDate': new Date().toISOString() },
+      ReturnValues: 'ALL_NEW' as const,
+    };
+    const result = await docClient.send(new UpdateCommand(priorityUpdateParams));
+    return result.Attributes as Task | null;
+  }
 
   const modifiedDate = new Date().toISOString();
   updateData.modifiedDate = modifiedDate;
@@ -141,6 +187,18 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
     } else if (updateData.status === 'Canceled') {
       updateData.completedDate = null; 
     }
+  }
+
+  // After the main update, if isMIT was changed, trigger reprioritization
+  if (updateData.isMIT !== undefined) {
+    // Use a lock to prevent concurrent reprioritization for the same user
+    if (!userReprioritizationLocks.has(userId)) {
+      const reprioritizePromise = reprioritizeTasks(userId).finally(() => {
+        userReprioritizationLocks.delete(userId);
+      });
+      userReprioritizationLocks.set(userId, reprioritizePromise);
+    }
+    await userReprioritizationLocks.get(userId);
   }
 
   const updateExpressionParts: string[] = [];
@@ -167,16 +225,19 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
     ReturnValues: 'ALL_NEW' as const,
   };
 
-  console.log('[updateTask] Sending UpdateCommand to DynamoDB:', JSON.stringify(params, null, 2));
-
   try {
     const command = new UpdateCommand(params);
     const result: UpdateCommandOutput = await docClient.send(command);
-    console.log('[updateTask] Successfully updated task. New attributes:', result.Attributes);
-    return result.Attributes as Task | null;
+    const updatedTask = result.Attributes as Task | null;
+
+    // After the main update, if isMIT was changed, trigger reprioritization
+    if (updateData.isMIT !== undefined) {
+      await reprioritizeTasks(userId);
+    }
+
+    return updatedTask;
   } catch (error) {
-    console.error('[updateTask] CRITICAL: Error updating task in DynamoDB:', error);
-    throw new Error('Could not update task.');
+    throw new Error("Could not update task.");
   }
 }
 

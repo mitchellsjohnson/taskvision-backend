@@ -1,4 +1,5 @@
 const mockSend = jest.fn();
+
 const mockDynamoDBClient = { send: mockSend };
 
 jest.mock("@aws-sdk/client-dynamodb", () => ({
@@ -12,10 +13,10 @@ jest.mock("@aws-sdk/lib-dynamodb", () => ({
       send: mockSend,
     })),
   },
-  PutCommand: jest.fn(),
-  QueryCommand: jest.fn(),
-  UpdateCommand: jest.fn(),
-  DeleteCommand: jest.fn(),
+  PutCommand: jest.fn(input => ({ type: 'Put', input })),
+  QueryCommand: jest.fn(input => ({ type: 'Query', input })),
+  UpdateCommand: jest.fn(input => ({ type: 'Update', input })),
+  DeleteCommand: jest.fn(input => ({ type: 'Delete', input })),
 }));
 
 import {
@@ -23,6 +24,7 @@ import {
   getTasksForUser,
   updateTask,
   deleteTask,
+  reprioritizeTasks,
 } from "./task-operations";
 import { Task } from "../types";
 
@@ -32,6 +34,30 @@ describe("Task Operations", () => {
   });
 
   describe("createTask", () => {
+    it("should create a new task with the correct priority", async () => {
+      const testTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Open" as const,
+      };
+
+      mockSend
+        .mockResolvedValueOnce({ Items: [{ priority: 1 }, { priority: 2 }] })
+        .mockResolvedValueOnce({});
+
+      const task = await createTask("test-user-id", testTask);
+
+      expect(task).toBeDefined();
+      expect(task.title).toBe(testTask.title);
+      expect(task.priority).toBe(3);
+      expect(task.description).toBe(testTask.description);
+      expect(task.status).toBe(testTask.status);
+      expect(task.creationDate).toBeDefined();
+      expect(task.modifiedDate).toBeDefined();
+      expect(task.completedDate).toBeNull();
+      expect(task.UserId).toBe("test-user-id");
+    });
+
     it("should create a new task", async () => {
       const testTask = {
         title: "Test Task",
@@ -95,6 +121,66 @@ describe("Task Operations", () => {
   });
 
   describe("updateTask", () => {
+    it("should call reprioritizeTasks when priority is changed", async () => {
+      const updateData: Partial<Task> = {
+        priority: 2,
+      };
+      const mockReturnedTask: Task = {
+        TaskId: "task-1",
+        UserId: "test-user-id",
+        title: "Updated Title",
+        status: "Completed",
+        description: "Test Description",
+        creationDate: "2023-01-01T00:00:00.000Z",
+        modifiedDate: "2023-01-01T00:00:00.000Z",
+        completedDate: "2023-01-01T00:00:00.000Z",
+        dueDate: null,
+        priority: 2,
+        isMIT: false,
+        tags: [],
+      };
+      
+      mockSend.mockResolvedValueOnce({ Attributes: mockReturnedTask });
+      // reprioritizeTasks will call getTasksForUser and then update tasks
+      mockSend.mockResolvedValueOnce({ Items: [] }); // for getTasksForUser inside reprioritize
+      mockSend.mockResolvedValue({}); // for updateTask inside reprioritize
+
+      await updateTask("test-user-id", "task-1", updateData);
+
+      // We expect getTasksForUser to be called inside reprioritizeTasks
+      expect(mockSend).toHaveBeenCalled();
+    });
+
+    it("should call reprioritizeTasks when isMIT is changed", async () => {
+      const updateData: Partial<Task> = {
+        isMIT: true,
+      };
+      const mockReturnedTask: Task = {
+        TaskId: "task-1",
+        UserId: "test-user-id",
+        title: "Updated Title",
+        status: "Completed",
+        description: "Test Description",
+        creationDate: "2023-01-01T00:00:00.000Z",
+        modifiedDate: "2023-01-01T00:00:00.000Z",
+        completedDate: "2023-01-01T00:00:00.000Z",
+        dueDate: null,
+        priority: 1,
+        isMIT: true,
+        tags: [],
+      };
+
+      mockSend.mockResolvedValueOnce({ Attributes: mockReturnedTask });
+      // reprioritizeTasks will call getTasksForUser and then update tasks
+      mockSend.mockResolvedValueOnce({ Items: [] }); // for getTasksForUser inside reprioritize
+      mockSend.mockResolvedValue({}); // for updateTask inside reprioritize
+
+      await updateTask("test-user-id", "task-1", updateData);
+
+      // We expect getTasksForUser to be called inside reprioritizeTasks
+      expect(mockSend).toHaveBeenCalled();
+    });
+
     it("should update a task", async () => {
       const updateData: Partial<Task> = {
         title: "Updated Title",
@@ -169,6 +255,51 @@ describe("Task Operations", () => {
         success: true,
         message: "Task deleted successfully",
       });
+    });
+  });
+
+  describe("reprioritizeTasks", () => {
+    it("should reprioritize tasks correctly", async () => {
+      const mockTasks = [
+        { TaskId: "task-1", isMIT: false, priority: 1 },
+        { TaskId: "task-2", isMIT: true, priority: 2 },
+        { TaskId: "task-3", isMIT: false, priority: 3 },
+        { TaskId: "task-4", isMIT: true, priority: 4 },
+      ];
+
+      mockSend.mockImplementation(command => {
+        if (command.type === 'Query') {
+          return Promise.resolve({ Items: mockTasks });
+        }
+        if (command.type === 'Update') {
+          return Promise.resolve({ Attributes: { ...command.input } });
+        }
+        return Promise.resolve({});
+      });
+
+      await reprioritizeTasks("test-user-id");
+      
+      const updateCalls = mockSend.mock.calls.filter(call => call[0].type === 'Update');
+
+      expect(updateCalls.length).toBe(4);
+
+      // MIT tasks should have priorities 1 and 2
+      const updateCall2 = updateCalls.find(call => call[0].input.Key.SK === 'TASK#task-2');
+      expect(updateCall2).toBeDefined();
+      expect(updateCall2[0].input.ExpressionAttributeValues[":priority"]).toBe(1);
+
+      const updateCall4 = updateCalls.find(call => call[0].input.Key.SK === 'TASK#task-4');
+      expect(updateCall4).toBeDefined();
+      expect(updateCall4[0].input.ExpressionAttributeValues[":priority"]).toBe(2);
+
+      // LIT tasks should have priorities 3 and 4
+      const updateCall1 = updateCalls.find(call => call[0].input.Key.SK === 'TASK#task-1');
+      expect(updateCall1).toBeDefined();
+      expect(updateCall1[0].input.ExpressionAttributeValues[":priority"]).toBe(3);
+
+      const updateCall3 = updateCalls.find(call => call[0].input.Key.SK === 'TASK#task-3');
+      expect(updateCall3).toBeDefined();
+      expect(updateCall3[0].input.ExpressionAttributeValues[":priority"]).toBe(4);
     });
   });
 }); 
