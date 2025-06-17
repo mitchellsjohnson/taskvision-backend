@@ -1,15 +1,15 @@
 import express from "express";
 import {
-  checkRequiredPermissions,
   validateAccessToken,
+  checkRequiredRole,
 } from "../middleware/auth0.middleware";
-import { AdminMessagesPermissions, AdminFeaturesPermissions } from "./messages.permissions";
 import {
   getAdminMessage,
+  getEcosystemAdminMessage,
   getProtectedMessage,
   getPublicMessage,
-  getAdminFeaturesFlag,
 } from "./messages.service";
+import { Message } from "./message.model";
 
 export const messagesRouter = express.Router();
 
@@ -36,7 +36,7 @@ messagesRouter.get("/protected", validateAccessToken, (req, res) => {
 messagesRouter.get(
   "/admin",
   validateAccessToken,
-  checkRequiredPermissions([AdminMessagesPermissions.Read]),
+  checkRequiredRole("admin"),
   (req, res) => {
     const message = getAdminMessage();
 
@@ -45,11 +45,11 @@ messagesRouter.get(
 );
 
 messagesRouter.get(
-  "/admin-features",
+  "/ecosystem-admin",
   validateAccessToken,
-  checkRequiredPermissions([AdminFeaturesPermissions.Read]),
+  checkRequiredRole("ecosystem-admin"),
   (req, res) => {
-    const message = getAdminFeaturesFlag();
+    const message = getEcosystemAdminMessage();
 
     res.status(200).json(message);
   }

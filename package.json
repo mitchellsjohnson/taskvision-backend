@@ -4,7 +4,7 @@
   "description": "Auth0 Express.js API code sample with TypeScript",
   "main": "src/index.ts",
   "scripts": {
-    "start": "DISABLE_AUTH=true ts-node-dev --require dotenv/config --respawn --pretty --transpile-only src/index.ts",
+    "start": "ts-node-dev --require dotenv/config --respawn --pretty --transpile-only src/index.ts",
     "build": "tsc && npm run copy-files",
     "copy-files": "mkdir -p .aws-sam/build/TaskVisionFunction && cp package.json .aws-sam/build/TaskVisionFunction/ && cp -r src .aws-sam/build/TaskVisionFunction/ && cd .aws-sam/build/TaskVisionFunction && npm install --production",
     "test": "jest",

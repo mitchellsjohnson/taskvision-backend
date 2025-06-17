@@ -17,22 +17,28 @@ const jwtCheck =
         tokenSigningAlg: 'RS256'
       });
 
-// Permission checker middleware (stub, accepts permission array)
-const checkRequiredPermissions =
-  (permissions: string[]) =>
-  (req: Request, res: Response, next: NextFunction) => {
+// Role checker middleware
+const checkRequiredRole = (role: string) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (process.env.DISABLE_AUTH === 'true') {
       // No need to log this in production
       // console.warn('[Permission Bypassed] DISABLE_AUTH=true');
       return next();
     }
 
-    // TODO: Check actual user claims against `permissions` array
-    console.log('[Permissions Required]:', permissions);
-    next();
+    const namespace = process.env.AUTH0_AUDIENCE;
+    // @ts-ignore
+    const userRoles = req.auth.payload[`${namespace}/roles`] as string[] || [];
+
+    if (userRoles.includes(role)) {
+      next();
+    } else {
+      res.status(403).send({ message: 'Insufficient role' });
+    }
   };
+};
 
 // Optional alias
 const validateAccessToken = jwtCheck;
 
-export { jwtCheck, validateAccessToken, checkRequiredPermissions };
+export { jwtCheck, validateAccessToken, checkRequiredRole };

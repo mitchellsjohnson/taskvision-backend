@@ -2,16 +2,17 @@ import express, { Request, Response } from "express";
 import { validateAccessToken } from "../middleware/auth0.middleware";
 import {
   createTask,
-  getTasksForUser,
   updateTask,
   deleteTask,
+  getTasksForUser,
 } from "../db/task-operations";
-
-export const tasksRouter = express.Router();
+import { Task } from '../types';
 
 const getUserId = (req: Request): string => {
   return req.auth?.payload.sub || "";
 };
+
+export const tasksRouter = express.Router();
 
 // GET /api/tasks
 tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) => {
@@ -59,13 +60,27 @@ tasksRouter.put("/:taskId", validateAccessToken, async (req: Request, res: Respo
   try {
     const userId = getUserId(req);
     const { taskId } = req.params;
-    const taskData = req.body;
+    const {
+      title, description, dueDate, status, isMIT, 
+      priority, tags, completedDate
+    } = req.body;
 
-    if (taskData.status && !["Open", "Completed", "Canceled", "Waiting"].includes(taskData.status)) {
-      return res.status(400).json({ message: "Status must be Open, Completed, or Canceled" });
+    const updateData: Partial<Task> = {};
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (dueDate !== undefined) updateData.dueDate = dueDate;
+    if (status !== undefined) {
+      if (!["Open", "InProgress", "Completed", "Waiting", "Canceled"].includes(status)) {
+        return res.status(400).json({ message: "Status must be one of: Open, InProgress, Completed, Waiting, Canceled" });
+      }
+      updateData.status = status;
     }
+    if (isMIT !== undefined) updateData.isMIT = isMIT;
+    if (priority !== undefined) updateData.priority = priority;
+    if (tags !== undefined) updateData.tags = tags;
+    if (completedDate !== undefined) updateData.completedDate = completedDate;
 
-    const updatedTask = await updateTask(userId, taskId, taskData);
+    const updatedTask = await updateTask(userId, taskId, updateData);
 
     if (!updatedTask) {
       return res.status(404).json({ message: "Task not found" });

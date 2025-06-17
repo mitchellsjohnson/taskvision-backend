@@ -24,6 +24,7 @@ import {
   updateTask,
   deleteTask,
 } from "./task-operations";
+import { Task } from "../types";
 
 describe("Task Operations", () => {
   beforeEach(() => {
@@ -95,43 +96,64 @@ describe("Task Operations", () => {
 
   describe("updateTask", () => {
     it("should update a task", async () => {
-      const updateData = {
+      const updateData: Partial<Task> = {
         title: "Updated Title",
-        status: "Completed" as const,
+        status: "Completed",
       };
 
-      const mockUpdatedTask = {
-        ...updateData,
+      const mockReturnedTask: Task = {
+        TaskId: "task-1",
+        UserId: "test-user-id",
+        title: "Updated Title",
+        status: "Completed",
         description: "Test Description",
-        creationDate: new Date().toISOString(),
-        modifiedDate: new Date().toISOString(),
-        completedDate: new Date().toISOString(),
+        creationDate: "2023-01-01T00:00:00.000Z",
+        modifiedDate: "2023-01-01T00:00:00.000Z",
+        completedDate: "2023-01-01T00:00:00.000Z",
+        dueDate: null,
+        priority: 1,
+        isMIT: false,
+        tags: [],
       };
 
-      mockSend.mockResolvedValueOnce({ Attributes: mockUpdatedTask });
+      mockSend.mockResolvedValueOnce({ Attributes: mockReturnedTask });
 
-      const updatedTask = await updateTask("test-user-id", "task-1", updateData) as typeof mockUpdatedTask;
+      const updatedTask = (await updateTask(
+        "test-user-id",
+        "task-1",
+        updateData
+      )) as Task;
 
-      expect(updatedTask).toEqual(mockUpdatedTask);
+      expect(updatedTask).toEqual(mockReturnedTask);
     });
 
     it("should clear completedDate when status changes from Completed", async () => {
-      const updateData = {
-        status: "Open" as const,
-      };
-
-      const mockUpdatedTask = {
-        title: "Test Task",
-        description: "Test Description",
+      const updateData: Partial<Task> = {
         status: "Open",
-        creationDate: new Date().toISOString(),
-        modifiedDate: new Date().toISOString(),
-        completedDate: null,
       };
 
-      mockSend.mockResolvedValueOnce({ Attributes: mockUpdatedTask });
+      const mockReturnedTask: Task = {
+        TaskId: "task-1",
+        UserId: "test-user-id",
+        title: "Test Task",
+        status: "Open",
+        description: "Test Description",
+        creationDate: "2023-01-01T00:00:00.000Z",
+        modifiedDate: "2023-01-01T00:00:00.000Z",
+        completedDate: null,
+        dueDate: null,
+        priority: 1,
+        isMIT: false,
+        tags: [],
+      };
 
-      const updatedTask = await updateTask("test-user-id", "task-1", updateData) as typeof mockUpdatedTask;
+      mockSend.mockResolvedValueOnce({ Attributes: mockReturnedTask });
+
+      const updatedTask = (await updateTask(
+        "test-user-id",
+        "task-1",
+        updateData
+      )) as Task;
 
       expect(updatedTask.completedDate).toBeNull();
     });

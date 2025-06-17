@@ -3,13 +3,16 @@ import {
   QueryCommand,
   UpdateCommand,
   DeleteCommand,
+  DynamoDBDocumentClient,
+  UpdateCommandOutput,
 } from "@aws-sdk/lib-dynamodb";
 import { ulid } from "ulid";
 import docClient from "./dynamo";
+import { Task } from '../types';
 
 const TABLE_NAME = process.env.TABLE_NAME || "TaskVision";
 
-type TaskStatus = "Open" | "Completed" | "Canceled";
+type TaskStatus = "Open" | "Completed" | "Canceled" | "Waiting";
 
 interface TaskInput {
   title: string;
@@ -33,6 +36,7 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     isMIT: false,
     priority: 999, // Default to last
     ...taskData,
+    tags: [], // Initialize with an empty array
     creationDate: now,
     modifiedDate: now,
     completedDate: taskData.status === "Completed" ? now : null,
@@ -67,15 +71,21 @@ export const getTasksForUser = async (
       ":pk": `USER#${userId}`,
       ":sk": "TASK#",
     },
+    ExpressionAttributeNames: {
+      "#st": "status",
+      "#title": "title",
+      "#description": "description",
+    },
   };
 
   const filterExpressions: string[] = [];
-  const expressionAttributeNames: { [key: string]: string } = {};
+  
+  // This is the corrected line
+  let projectionExpression = "TaskId, #title, #description, dueDate, #st, isMIT, priority, creationDate, modifiedDate, completedDate, tags";
 
   if (filters.status && filters.status.length > 0) {
     const statusPlaceholders = filters.status.map((s, i) => `:status${i}`);
-    filterExpressions.push(`#status IN (${statusPlaceholders.join(", ")})`);
-    expressionAttributeNames["#status"] = "status";
+    filterExpressions.push(`#st IN (${statusPlaceholders.join(", ")})`);
     filters.status.forEach((s, i) => {
       params.ExpressionAttributeValues[`:status${i}`] = s;
     });
@@ -88,7 +98,7 @@ export const getTasksForUser = async (
       return `contains(#tags, ${placeholder})`;
     });
     filterExpressions.push(`(${tagExpressions.join(" OR ")})`);
-    expressionAttributeNames["#tags"] = "tags";
+    params.ExpressionAttributeNames["#tags"] = "tags";
   }
 
   if (filters.search) {
@@ -98,110 +108,77 @@ export const getTasksForUser = async (
     filterExpressions.push(
       `(contains(lower(#title), ${searchPlaceholder}) OR contains(lower(#description), ${searchPlaceholder}))`
     );
-    expressionAttributeNames["#title"] = "title";
-    expressionAttributeNames["#description"] = "description";
   }
+
+  params.ProjectionExpression = projectionExpression;
 
   if (filterExpressions.length > 0) {
     params.FilterExpression = filterExpressions.join(" AND ");
-    if (Object.keys(expressionAttributeNames).length > 0) {
-      params.ExpressionAttributeNames = expressionAttributeNames;
-    }
   }
 
   console.log("[getTasksForUser] Querying with params:", JSON.stringify(params, null, 2));
 
   try {
-    const { Items } = await docClient.send(new QueryCommand(params));
-    return Items;
+    const result = await docClient.send(new QueryCommand(params));
+    return result.Items;
   } catch (error) {
-    console.error("Error fetching tasks with filters:", error);
+    console.error("Error fetching tasks for user:", error);
     throw new Error("Could not fetch tasks.");
   }
 };
 
-interface TaskUpdateInput {
-  title?: string;
-  description?: string;
-  dueDate?: string;
-  status?: TaskStatus;
-  isMIT?: boolean;
-  priority?: number;
-  [key: string]: any; // Allow other properties
-}
-
-export const updateTask = async (
-  userId: string,
-  taskId: string,
-  updateData: TaskUpdateInput
-) => {
+export async function updateTask(userId: string, taskId: string, updateData: Partial<Task>): Promise<Task | null> {
   console.log(`[updateTask] Starting update for userId: ${userId}, taskId: ${taskId}`);
-  console.log("[updateTask] Received updateData:", JSON.stringify(updateData, null, 2));
+  console.log(`[updateTask] Received updateData:`, updateData);
 
-  const updateExpression: string[] = [];
-  const expressionAttributeValues: { [key: string]: any } = {};
-  const expressionAttributeNames: { [key: string]: string } = {};
+  const modifiedDate = new Date().toISOString();
+  updateData.modifiedDate = modifiedDate;
 
-  // Always update the modifiedDate
-  const now = new Date().toISOString();
-  updateExpression.push("#modifiedDate = :modifiedDate");
-  expressionAttributeNames["#modifiedDate"] = "modifiedDate";
-  expressionAttributeValues[":modifiedDate"] = now;
-
-  // Iterate over all keys in updateData to build the update expression
-  for (const [key, value] of Object.entries(updateData)) {
-    // Skip keys that are part of the primary key or shouldn't be changed
-    if (key === "PK" || key === "SK" || key === "UserId" || key === "TaskId" || key === "creationDate") continue;
-    
-    // We handle modifiedDate separately above
-    if (key === "modifiedDate") continue;
-
-    if (value !== undefined) {
-      const attributeName = `#${key}`;
-      const attributeValueKey = `:${key}`;
-
-      updateExpression.push(`${attributeName} = ${attributeValueKey}`);
-      expressionAttributeNames[attributeName] = key;
-      expressionAttributeValues[attributeValueKey] = value;
-      
-      // Special handling for completedDate when status changes
-      if (key === "status") {
-        updateExpression.push("#completedDate = :completedDate");
-        expressionAttributeNames["#completedDate"] = "completedDate";
-        expressionAttributeValues[":completedDate"] = (value === "Completed") ? now : null;
-      }
+  // Explicitly handle status updates to ensure data integrity
+  if (updateData.status) {
+    if (updateData.status === 'Completed') {
+      updateData.completedDate = modifiedDate;
+    } else if (updateData.status === 'Canceled') {
+      updateData.completedDate = null; 
     }
   }
 
-  if (updateExpression.length === 0) {
-    // No fields to update
-    console.log("[updateTask] No fields to update. Exiting.");
-    return;
+  const updateExpressionParts: string[] = [];
+  const expressionAttributeNames: { [key: string]: string } = {};
+  const expressionAttributeValues: { [key: string]: any } = {};
+
+  for (const [key, value] of Object.entries(updateData)) {
+    const attributeKey = `#${key}`;
+    const attributeValueKey = `:${key}`;
+    updateExpressionParts.push(`${attributeKey} = ${attributeValueKey}`);
+    expressionAttributeNames[attributeKey] = key;
+    expressionAttributeValues[attributeValueKey] = value;
   }
 
-  const command = new UpdateCommand({
+  const params = {
     TableName: TABLE_NAME,
     Key: {
       PK: `USER#${userId}`,
       SK: `TASK#${taskId}`,
     },
-    UpdateExpression: `SET ${updateExpression.join(", ")}`,
-    ExpressionAttributeValues: expressionAttributeValues,
+    UpdateExpression: `SET ${updateExpressionParts.join(', ')}`,
     ExpressionAttributeNames: expressionAttributeNames,
-    ReturnValues: "ALL_NEW",
-  });
+    ExpressionAttributeValues: expressionAttributeValues,
+    ReturnValues: 'ALL_NEW' as const,
+  };
 
-  console.log("[updateTask] Sending UpdateCommand to DynamoDB:", JSON.stringify(command, null, 2));
+  console.log('[updateTask] Sending UpdateCommand to DynamoDB:', JSON.stringify(params, null, 2));
 
   try {
-    const { Attributes } = await docClient.send(command);
-    console.log("[updateTask] Successfully updated task. New attributes:", Attributes);
-    return Attributes;
+    const command = new UpdateCommand(params);
+    const result: UpdateCommandOutput = await docClient.send(command);
+    console.log('[updateTask] Successfully updated task. New attributes:', result.Attributes);
+    return result.Attributes as Task | null;
   } catch (error) {
-    console.error("[updateTask] CRITICAL: Error updating task in DynamoDB:", error);
-    throw new Error("Could not update task.");
+    console.error('[updateTask] CRITICAL: Error updating task in DynamoDB:', error);
+    throw new Error('Could not update task.');
   }
-};
+}
 
 export const deleteTask = async (userId: string, taskId: string) => {
   const command = new DeleteCommand({
@@ -219,4 +196,4 @@ export const deleteTask = async (userId: string, taskId: string) => {
     console.error("Error deleting task:", error);
     throw new Error("Could not delete task.");
   }
-}; 
+};

@@ -18,9 +18,9 @@ export const getAdminMessage = (): Message => {
   };
 };
 
-export const getAdminFeaturesFlag = (): Message => {
+export const getEcosystemAdminMessage = (): Message => {
   return {
-    text: "Access to Admin Features is allowed for this user.",
+    text: "This is an ecosystem-admin message.",
   };
 };
 
