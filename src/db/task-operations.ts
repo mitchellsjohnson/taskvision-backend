@@ -5,10 +5,12 @@ import {
   DeleteCommand,
   DynamoDBDocumentClient,
   UpdateCommandOutput,
+  GetCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { ulid } from "ulid";
 import docClient from "./dynamo";
 import { Task } from '../types';
+import { validateTaskData } from '../utils/validation';
 
 const TABLE_NAME = process.env.TABLE_NAME || "TaskVision";
 
@@ -25,6 +27,14 @@ interface TaskInput {
 }
 
 export const createTask = async (userId: string, taskData: TaskInput) => {
+  // Validate task data
+  const validation = validateTaskData(taskData);
+  if (!validation.isValid) {
+    const error = new Error('Validation failed');
+    (error as any).validationErrors = validation.errors;
+    throw error;
+  }
+
   // First, get the current number of tasks to determine the new priority
   const existingTasks = await getTasksForUser(userId);
   const newPriority = (existingTasks?.length || 0) + 1;
@@ -68,6 +78,10 @@ export const getTasksForUser = async (
     status?: string[];
     tags?: string[];
     search?: string;
+    dateFilter?: string;
+    startDate?: string;
+    endDate?: string;
+    noDueDate?: boolean;
   } = {}
 ) => {
   const params: any = {
@@ -116,6 +130,38 @@ export const getTasksForUser = async (
     );
   }
 
+  // Date filtering
+  if (filters.dateFilter && filters.dateFilter !== 'all') {
+    params.ExpressionAttributeNames["#dueDate"] = "dueDate";
+    
+    if (filters.dateFilter === 'pastDue') {
+      // Past due: has due date AND due date is not empty AND due date < today
+      if (filters.endDate) {
+        filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate <> :emptyValue AND #dueDate < :endDate)`);
+        params.ExpressionAttributeValues[":endDate"] = filters.endDate;
+        params.ExpressionAttributeValues[":emptyValue"] = "";
+      }
+    } else if (filters.dateFilter === 'dueToday') {
+      // Due today: due date = today
+      if (filters.startDate) {
+        filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate = :startDate)`);
+        params.ExpressionAttributeValues[":startDate"] = filters.startDate;
+      }
+    } else if (filters.dateFilter === 'dueThisWeek' || filters.dateFilter === 'dueThisMonth') {
+      // Due this week/month: due date >= startDate AND due date <= endDate
+      if (filters.startDate && filters.endDate) {
+        filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate >= :startDate AND #dueDate <= :endDate)`);
+        params.ExpressionAttributeValues[":startDate"] = filters.startDate;
+        params.ExpressionAttributeValues[":endDate"] = filters.endDate;
+      }
+    } else if (filters.dateFilter === 'noDueDate') {
+      // No due date: either dueDate doesn't exist or is null/empty
+      filterExpressions.push(`(attribute_not_exists(#dueDate) OR #dueDate = :nullValue OR #dueDate = :emptyValue)`);
+      params.ExpressionAttributeValues[":nullValue"] = null;
+      params.ExpressionAttributeValues[":emptyValue"] = "";
+    }
+  }
+
   params.ProjectionExpression = projectionExpression;
 
   if (filterExpressions.length > 0) {
@@ -131,50 +177,98 @@ export const getTasksForUser = async (
   }
 };
 
-export const reprioritizeTasks = async (userId: string) => {
-  const allTasks = await getTasksForUser(userId);
-
-  if (!allTasks) return;
-
-  const mitTasks = allTasks.filter(t => t.isMIT).sort((a, b) => a.priority - b.priority);
-  const litTasks = allTasks.filter(t => !t.isMIT).sort((a, b) => a.priority - b.priority);
-
-  let currentPriority = 1;
-  const promises = [];
-
-  for (const task of mitTasks) {
-    if (task.priority !== currentPriority) {
-      promises.push(updateTask(userId, task.TaskId, { priority: currentPriority }));
-    }
-    currentPriority++;
+export const getTask = async (userId: string, taskId: string) => {
+  const params = {
+    TableName: TABLE_NAME,
+    Key: {
+      PK: `USER#${userId}`,
+      SK: `TASK#${taskId}`,
+    },
+  };
+  try {
+    const result = await docClient.send(new GetCommand(params));
+    return result.Item ? (result.Item as Task) : null;
+  } catch (error) {
+    console.error("Error fetching single task:", error);
+    throw new Error("Could not fetch task.");
   }
+}
 
-  for (const task of litTasks) {
-    if (task.priority !== currentPriority) {
-      promises.push(updateTask(userId, task.TaskId, { priority: currentPriority }));
+export const reprioritizeTasks = async (userId: string, movedTaskId?: string, newPosition?: number) => {
+    // Use a strongly consistent read to ensure we get the latest data
+    const allTasksResult = await docClient.send(new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+        ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
+        ConsistentRead: true,
+    }));
+    
+    let allTasks = allTasksResult.Items || [];
+
+    // Filter out completed and canceled tasks, as they don't have a priority
+    let activeTasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Canceled');
+
+    const movedTask = movedTaskId ? activeTasks.find(t => t.TaskId === movedTaskId) : undefined;
+    
+    if (movedTask && newPosition !== undefined) {
+        // Remove the moved task from its current spot
+        activeTasks = activeTasks.filter(t => t.TaskId !== movedTaskId);
+        // Insert it at the new position
+        activeTasks.splice(newPosition, 0, movedTask);
     }
-    currentPriority++;
-  }
+    
+    // Separate into MIT and LIT lists based on their current state
+    const mitTasks = activeTasks.filter(t => t.isMIT).sort((a, b) => a.priority - b.priority);
+    const litTasks = activeTasks.filter(t => !t.isMIT).sort((a, b) => a.priority - b.priority);
 
-  await Promise.all(promises);
+    // Re-order based on the new arrangement if a task was moved
+    const orderedTasks = movedTaskId ? [...mitTasks, ...litTasks] : activeTasks;
+
+    const promises = orderedTasks.map((task, index) => {
+        const newPriority = index + 1;
+        if (task.priority !== newPriority) {
+            // This is a simplified update to only change the priority
+            return docClient.send(new UpdateCommand({
+                TableName: TABLE_NAME,
+                Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+                UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+                ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+                ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+            }));
+        }
+        return Promise.resolve();
+    });
+
+    await Promise.all(promises);
 };
 
-export async function updateTask(userId: string, taskId: string, updateData: Partial<Task>): Promise<Task | null> {
-  const isReprioritizing = updateData.priority !== undefined && Object.keys(updateData).length === 1;
+export async function updateTask(userId: string, taskId: string, updateData: Partial<Task & { position?: number }>): Promise<Task | null> {
+  // Validate task data if title or description are being updated
+  if (updateData.title || updateData.description) {
+    const validation = validateTaskData({
+      title: updateData.title || undefined,
+      description: updateData.description || undefined,
+    });
+    if (!validation.isValid) {
+      const error = new Error('Validation failed');
+      (error as any).validationErrors = validation.errors;
+      throw error;
+    }
+  }
 
-  // If this is a priority-only update, we can skip the complex logic
-  if (isReprioritizing) {
-    // Simplified update for reprioritization calls to avoid loops
-    const priorityUpdateParams = {
-      TableName: TABLE_NAME,
-      Key: { PK: `USER#${userId}`, SK: `TASK#${taskId}` },
-      UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
-      ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
-      ExpressionAttributeValues: { ':priority': updateData.priority, ':modifiedDate': new Date().toISOString() },
-      ReturnValues: 'ALL_NEW' as const,
-    };
-    const result = await docClient.send(new UpdateCommand(priorityUpdateParams));
-    return result.Attributes as Task | null;
+  // If 'position' is present, this is a reordering event.
+  // Handle it separately and then proceed with other updates if necessary.
+  if (updateData.position !== undefined) {
+    await reprioritizeTasks(userId, taskId, updateData.position);
+    // After reprioritizing, we remove 'position' so it's not added to the DB.
+    delete updateData.position; 
+  }
+
+  // If after handling position, there are no other fields to update, we can return early.
+  // This is especially true if the move was initiated by the arrows, which only sends position.
+  if (Object.keys(updateData).length === 0) {
+    const updatedTask = await getTask(userId, taskId); // We need to get the updated task state
+    return updatedTask;
   }
 
   const modifiedDate = new Date().toISOString();

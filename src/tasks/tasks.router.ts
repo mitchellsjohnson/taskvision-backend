@@ -18,12 +18,16 @@ export const tasksRouter = express.Router();
 tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const { status, tags, search } = req.query;
+    const { status, tags, search, dateFilter, startDate, endDate, noDueDate } = req.query;
 
     const filters: any = {};
     if (status) filters.status = (status as string).split(",");
     if (tags) filters.tags = (tags as string).split(",");
     if (search) filters.search = search as string;
+    if (dateFilter) filters.dateFilter = dateFilter as string;
+    if (startDate) filters.startDate = startDate as string;
+    if (endDate) filters.endDate = endDate as string;
+    if (noDueDate) filters.noDueDate = noDueDate === 'true';
 
     const tasks = await getTasksForUser(userId, filters);
     res.status(200).json(tasks);
@@ -49,8 +53,14 @@ tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) =
 
     const newTask = await createTask(userId, { title, description, dueDate, status });
     res.status(201).json(newTask);
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
+    if (error.validationErrors) {
+      return res.status(400).json({ 
+        message: "Validation failed", 
+        errors: error.validationErrors 
+      });
+    }
     res.status(500).json({ message: "Error creating task" });
   }
 });
@@ -87,8 +97,14 @@ tasksRouter.put("/:taskId", validateAccessToken, async (req: Request, res: Respo
     }
 
     res.status(200).json(updatedTask);
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
+    if (error.validationErrors) {
+      return res.status(400).json({ 
+        message: "Validation failed", 
+        errors: error.validationErrors 
+      });
+    }
     res.status(500).json({ message: "Error updating task" });
   }
 });
