@@ -24,6 +24,9 @@ interface TaskInput {
   description?: string;
   dueDate?: string;
   status: TaskStatus;
+  isMIT?: boolean;
+  priority?: number;
+  tags?: string[];
 }
 
 export const createTask = async (userId: string, taskData: TaskInput) => {
@@ -34,10 +37,6 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     (error as any).validationErrors = validation.errors;
     throw error;
   }
-
-  // First, get the current number of tasks to determine the new priority
-  const existingTasks = await getTasksForUser(userId);
-  const newPriority = (existingTasks?.length || 0) + 1;
 
   const taskId = ulid();
   const now = new Date().toISOString();
@@ -50,10 +49,13 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     EntityType: "Task",
     TaskId: taskId,
     UserId: userId,
-    isMIT: false,
-    priority: newPriority,
-    ...taskData,
-    tags: [], // Initialize with an empty array
+    isMIT: taskData.isMIT || false,
+    priority: taskData.priority || 1,
+    title: taskData.title,
+    description: taskData.description || '',
+    dueDate: taskData.dueDate || null,
+    status: taskData.status,
+    tags: taskData.tags || [],
     creationDate: now,
     modifiedDate: now,
     completedDate: taskData.status === "Completed" ? now : null,
@@ -66,6 +68,10 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
 
   try {
     await docClient.send(command);
+    
+    // Trigger reprioritization to handle the new task's position
+    await reprioritizeTasks(userId, taskId, (taskData.priority || 1) - 1);
+    
     return task;
   } catch (error) {
     throw new Error("Could not create task.");
@@ -221,13 +227,10 @@ export const reprioritizeTasks = async (userId: string, movedTaskId?: string, ne
     const mitTasks = activeTasks.filter(t => t.isMIT).sort((a, b) => a.priority - b.priority);
     const litTasks = activeTasks.filter(t => !t.isMIT).sort((a, b) => a.priority - b.priority);
 
-    // Re-order based on the new arrangement if a task was moved
-    const orderedTasks = movedTaskId ? [...mitTasks, ...litTasks] : activeTasks;
-
-    const promises = orderedTasks.map((task, index) => {
-        const newPriority = index + 1;
+    // Update MIT priorities (1-based: 1, 2, 3)
+    const mitPromises = mitTasks.map((task, index) => {
+        const newPriority = index + 1; // 1-based priority within MIT
         if (task.priority !== newPriority) {
-            // This is a simplified update to only change the priority
             return docClient.send(new UpdateCommand({
                 TableName: TABLE_NAME,
                 Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
@@ -239,7 +242,22 @@ export const reprioritizeTasks = async (userId: string, movedTaskId?: string, ne
         return Promise.resolve();
     });
 
-    await Promise.all(promises);
+    // Update LIT priorities (1-based: 1, 2, 3, 4...)
+    const litPromises = litTasks.map((task, index) => {
+        const newPriority = index + 1; // 1-based priority within LIT
+        if (task.priority !== newPriority) {
+            return docClient.send(new UpdateCommand({
+                TableName: TABLE_NAME,
+                Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+                UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+                ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+                ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+            }));
+        }
+        return Promise.resolve();
+    });
+
+    await Promise.all([...mitPromises, ...litPromises]);
 };
 
 export async function updateTask(userId: string, taskId: string, updateData: Partial<Task & { position?: number }>): Promise<Task | null> {

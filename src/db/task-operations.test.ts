@@ -49,7 +49,7 @@ describe("Task Operations", () => {
 
       expect(task).toBeDefined();
       expect(task.title).toBe(testTask.title);
-      expect(task.priority).toBe(3);
+      expect(task.priority).toBe(1);
       expect(task.description).toBe(testTask.description);
       expect(task.status).toBe(testTask.status);
       expect(task.creationDate).toBeDefined();
@@ -65,7 +65,10 @@ describe("Task Operations", () => {
         status: "Open" as const,
       };
 
-      mockSend.mockResolvedValueOnce({});
+      mockSend
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Items: [] })
+        .mockResolvedValue({});
 
       const task = await createTask("test-user-id", testTask);
 
@@ -86,7 +89,10 @@ describe("Task Operations", () => {
         status: "Completed" as const,
       };
 
-      mockSend.mockResolvedValueOnce({});
+      mockSend
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ Items: [] })
+        .mockResolvedValue({});
 
       const task = await createTask("test-user-id", testTask);
 

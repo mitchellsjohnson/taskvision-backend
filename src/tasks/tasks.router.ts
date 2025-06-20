@@ -41,7 +41,7 @@ tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) =>
 tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const { title, description, dueDate, status } = req.body;
+    const { title, description, dueDate, status, isMIT, priority, tags } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
@@ -51,7 +51,14 @@ tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) =
       return res.status(400).json({ message: "Status must be Open, Completed, or Canceled" });
     }
 
-    const newTask = await createTask(userId, { title, description, dueDate, status });
+    const taskData: any = { title, description, dueDate, status };
+    
+    // Add optional fields if provided
+    if (isMIT !== undefined) taskData.isMIT = isMIT;
+    if (priority !== undefined) taskData.priority = priority;
+    if (tags !== undefined) taskData.tags = tags;
+
+    const newTask = await createTask(userId, taskData);
     res.status(201).json(newTask);
   } catch (error: any) {
     console.error(error);
