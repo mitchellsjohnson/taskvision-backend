@@ -129,20 +129,18 @@ export const getTasksForUser = async (
 
   if (filters.search) {
     const searchPlaceholder = ":search";
-    params.ExpressionAttributeValues[searchPlaceholder] =
-      filters.search.toLowerCase();
+    params.ExpressionAttributeValues[searchPlaceholder] = filters.search;
     filterExpressions.push(
-      `(contains(lower(#title), ${searchPlaceholder}) OR contains(lower(#description), ${searchPlaceholder}))`
+      `(contains(#title, ${searchPlaceholder}) OR contains(#description, ${searchPlaceholder}))`
     );
   }
 
   // Date filtering
   if (filters.dateFilter && filters.dateFilter !== 'all') {
-    params.ExpressionAttributeNames["#dueDate"] = "dueDate";
-    
     if (filters.dateFilter === 'pastDue') {
       // Past due: has due date AND due date is not empty AND due date < today
       if (filters.endDate) {
+        params.ExpressionAttributeNames["#dueDate"] = "dueDate";
         filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate <> :emptyValue AND #dueDate < :endDate)`);
         params.ExpressionAttributeValues[":endDate"] = filters.endDate;
         params.ExpressionAttributeValues[":emptyValue"] = "";
@@ -150,18 +148,21 @@ export const getTasksForUser = async (
     } else if (filters.dateFilter === 'dueToday') {
       // Due today: due date = today
       if (filters.startDate) {
+        params.ExpressionAttributeNames["#dueDate"] = "dueDate";
         filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate = :startDate)`);
         params.ExpressionAttributeValues[":startDate"] = filters.startDate;
       }
     } else if (filters.dateFilter === 'dueThisWeek' || filters.dateFilter === 'dueThisMonth') {
       // Due this week/month: due date >= startDate AND due date <= endDate
       if (filters.startDate && filters.endDate) {
+        params.ExpressionAttributeNames["#dueDate"] = "dueDate";
         filterExpressions.push(`(attribute_exists(#dueDate) AND #dueDate >= :startDate AND #dueDate <= :endDate)`);
         params.ExpressionAttributeValues[":startDate"] = filters.startDate;
         params.ExpressionAttributeValues[":endDate"] = filters.endDate;
       }
     } else if (filters.dateFilter === 'noDueDate') {
       // No due date: either dueDate doesn't exist or is null/empty
+      params.ExpressionAttributeNames["#dueDate"] = "dueDate";
       filterExpressions.push(`(attribute_not_exists(#dueDate) OR #dueDate = :nullValue OR #dueDate = :emptyValue)`);
       params.ExpressionAttributeValues[":nullValue"] = null;
       params.ExpressionAttributeValues[":emptyValue"] = "";

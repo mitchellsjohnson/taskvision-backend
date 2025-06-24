@@ -7,6 +7,9 @@ import nocache from "nocache";
 import cors from "cors";
 import { messagesRouter } from "./messages/messages.router";
 import { tasksRouter } from "./tasks/tasks.router";
+import { tvagentRouter } from "./tvagent/tvagent.router";
+import tvagentV2Router from "./tvagent/tvagent-v2.router";
+import wellnessRouter from "./wellness/wellness.router";
 import { errorHandler } from "./middleware/error.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 
@@ -14,11 +17,7 @@ import { notFoundHandler } from "./middleware/not-found.middleware";
 const PORT = parseInt(process.env.PORT || "6060", 10);
 let CLIENT_ORIGIN_URL = process.env.CLIENT_ORIGIN_URL;
 
-if (process.env.DISABLE_AUTH === 'true') {
-  // No need to log this in production
-  // console.log(`Loaded env config from .env.local`);
-  // console.log("Offline mode detected.");
-}
+
 
 if (process.env.NODE_ENV !== 'production' && !CLIENT_ORIGIN_URL) {
   console.warn('CLIENT_ORIGIN_URL not set, defaulting to http://localhost:4040 for local development.');
@@ -82,6 +81,9 @@ app.use(nocache());
 app.use("/api", apiRouter);
 apiRouter.use("/messages", messagesRouter);
 apiRouter.use("/tasks", tasksRouter);
+apiRouter.use("/tvagent", tvagentRouter);
+apiRouter.use("/tvagent/v2", tvagentV2Router);
+apiRouter.use("/wellness", wellnessRouter);
 
 // Error handling
 app.use(errorHandler);
