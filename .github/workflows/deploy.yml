@@ -48,6 +48,8 @@ jobs:
               TableName=${{ secrets.TABLE_NAME }} \
               Auth0Domain=${{ secrets.AUTH0_DOMAIN }} \
               Auth0Audience=${{ secrets.AUTH0_AUDIENCE }} \
+              OpenAIApiKey=${{ secrets.OPENAI_API_KEY }} \
+              OpenAIAssistantId=${{ secrets.OPENAI_ASSISTANT_ID }} \
               Version=${{ github.sha }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
