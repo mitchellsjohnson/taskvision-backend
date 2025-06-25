@@ -13,6 +13,11 @@ const jwtCheck = auth({
 // Role checker middleware
 const checkRequiredRole = (role: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
+    // Check if auth is disabled
+    if (process.env.DISABLE_AUTH === 'true') {
+      return next();
+    }
+    
     const namespace = process.env.AUTH0_AUDIENCE;
     // @ts-ignore
     const userRoles = req.auth.payload[`${namespace}/roles`] as string[] || [];

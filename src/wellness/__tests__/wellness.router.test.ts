@@ -300,7 +300,7 @@ describe('Wellness Router', () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual(mockScores);
-      expect(mockedWellnessOperations.getWeeklyScores).toHaveBeenCalledWith('test-user-id', 4);
+      expect(mockedWellnessOperations.getWeeklyScores).toHaveBeenCalledWith('test-user-id', 4, 'America/New_York');
     });
 
     it('should use default weeks parameter', async () => {
@@ -309,7 +309,7 @@ describe('Wellness Router', () => {
       const response = await request(app).get('/api/wellness/scores');
 
       expect(response.status).toBe(200);
-      expect(mockedWellnessOperations.getWeeklyScores).toHaveBeenCalledWith('test-user-id', 12);
+      expect(mockedWellnessOperations.getWeeklyScores).toHaveBeenCalledWith('test-user-id', 12, 'America/New_York');
     });
 
     it('should return 400 for invalid weeks parameter', async () => {
