@@ -322,8 +322,6 @@ export const deletePracticeInstance = async (
  * Calculate and update weekly wellness score
  */
 export const updateWeeklyScore = async (userId: string, weekStart: string): Promise<void> => {
-  console.log(`📊 Updating weekly score for user ${userId}, week ${weekStart}`);
-  
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 6);
   const weekEndStr = weekEnd.toISOString().split('T')[0];
@@ -362,8 +360,6 @@ export const updateWeeklyScore = async (userId: string, weekStart: string): Prom
     TableName: TABLE_NAME,
     Item: scoreItem
   }));
-  
-  console.log(`✅ Weekly score updated: ${score} for week ${weekStart}`);
 };
 
 /**

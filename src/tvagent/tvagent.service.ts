@@ -94,17 +94,14 @@ export class TVAgentService {
       // Get conversation history BEFORE adding current message
       const conversationHistory = this.getConversationHistory(userId);
       
-      console.log('📝 Conversation history BEFORE adding current message:', conversationHistory.length);
-      console.log('🗂️ Total conversations in memory:', this.conversations.size);
-      console.log('👤 Current userId:', userId);
-      console.log('💬 Current user message:', message);
+
       
       // Add user message to conversation
       this.addToConversation(userId, { role: 'user', content: message });
       
       // Get updated conversation history AFTER adding current message
       const updatedHistory = this.getConversationHistory(userId);
-      console.log('📝 Conversation history AFTER adding current message:', updatedHistory.length);
+
       
       // Build messages array with conversation history
       const messages: any[] = [];
@@ -115,7 +112,7 @@ export class TVAgentService {
         .reverse()
         .find(m => m.role === 'assistant' && m.pendingAction)?.pendingAction;
       
-      console.log('🔍 Checking for pending action:', pendingAction);
+
       
       // Always include system message (either from history or create new)
       const systemMessage = conversationHistory.find(m => m.role === 'system') || {
@@ -754,7 +751,7 @@ When deleting tasks:
         // If this was an ask_for_clarification, preserve the pending action
         if (functionName === 'ask_for_clarification') {
           assistantMessage.pendingAction = functionArgs.pendingAction;
-          console.log('💾 Preserved pending action in assistant message:', functionArgs.pendingAction);
+          
         }
         
         this.addToConversation(userId, assistantMessage);

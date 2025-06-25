@@ -6,17 +6,17 @@ import { validateAccessToken } from '../middleware/auth0.middleware';
 const router = express.Router();
 
 // Initialize service with error handling
-let tvAgentService: TVAgentV2Service | null = null;
+let tvAgentV2Service: TVAgentV2Service | null = null;
 try {
-  tvAgentService = new TVAgentV2Service();
-  console.log('✅ TVAgent V2 Service initialized successfully');
+  tvAgentV2Service = new TVAgentV2Service();
+  console.log('TVAgent V2 Service initialized');
 } catch (error) {
   console.error('❌ TVAgent V2 Service initialization failed:', error instanceof Error ? error.message : error);
 }
 
 // Middleware to check if service is available
 const checkServiceAvailable = (req: Request, res: Response, next: any) => {
-  if (!tvAgentService) {
+  if (!tvAgentV2Service) {
     return res.status(503).json({
       success: false,
       message: 'TVAgent V2 service is not available. Please check OpenAI configuration.'
@@ -41,7 +41,7 @@ router.post('/message', validateAccessToken, checkServiceAvailable, async (req: 
       });
     }
 
-    const result = await tvAgentService!.sendMessage(userId, message, threadId);
+    const result = await tvAgentV2Service!.sendMessage(userId, message, threadId);
 
     res.json(result);
   } catch (error) {
@@ -62,7 +62,7 @@ router.get('/threads', validateAccessToken, checkServiceAvailable, async (req: R
     const userId = getUserId(req);
     const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
 
-    const threads = await tvAgentService!.getConversationThreads(userId, limit);
+    const threads = await tvAgentV2Service!.getConversationThreads(userId, limit);
 
     res.json({
       success: true,
@@ -93,7 +93,7 @@ router.get('/threads/:threadId/messages', validateAccessToken, checkServiceAvail
       });
     }
 
-    const messages = await tvAgentService!.getThreadMessages(threadId, limit);
+    const messages = await tvAgentV2Service!.getThreadMessages(threadId, limit);
 
     res.json({
       success: true,
@@ -117,7 +117,7 @@ router.post('/threads', validateAccessToken, checkServiceAvailable, async (req: 
     const { title } = req.body;
     const userId = getUserId(req);
 
-    const thread = await tvAgentService!.createNewThread(userId, title);
+    const thread = await tvAgentV2Service!.createNewThread(userId, title);
 
     res.json({
       success: true,
@@ -148,7 +148,7 @@ router.put('/threads/:threadId/switch', validateAccessToken, checkServiceAvailab
       });
     }
 
-    const thread = await tvAgentService!.switchToThread(userId, threadId);
+    const thread = await tvAgentV2Service!.switchToThread(userId, threadId);
 
     res.json({
       success: true,
@@ -171,7 +171,7 @@ router.get('/active-thread', validateAccessToken, checkServiceAvailable, async (
   try {
     const userId = getUserId(req);
 
-    const thread = await tvAgentService!.getActiveThread(userId);
+    const thread = await tvAgentV2Service!.getActiveThread(userId);
 
     res.json({
       success: true,
@@ -202,7 +202,7 @@ router.delete('/threads/:threadId', validateAccessToken, checkServiceAvailable, 
       });
     }
 
-    await tvAgentService!.deleteThread(userId, threadId);
+    await tvAgentV2Service!.deleteThread(userId, threadId);
 
     res.json({
       success: true,
@@ -249,7 +249,7 @@ router.put('/threads/:threadId/title', validateAccessToken, checkServiceAvailabl
       });
     }
 
-    const thread = await tvAgentService!.updateThreadTitle(userId, threadId, title.trim());
+    const thread = await tvAgentV2Service!.updateThreadTitle(userId, threadId, title.trim());
 
     res.json({
       success: true,

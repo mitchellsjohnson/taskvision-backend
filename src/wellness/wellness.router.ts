@@ -388,8 +388,6 @@ router.delete('/all-data', validateAccessToken, async (req, res) => {
     
     const practiceInstances = await dynamoClient.send(new ScanCommand(deleteParams));
     
-    console.log(`Found ${practiceInstances.Items?.length || 0} practice instances to delete`);
-    
     // Batch delete practice instances
     if (practiceInstances.Items && practiceInstances.Items.length > 0) {
       const deleteRequests = practiceInstances.Items.map((item: any) => ({
@@ -423,8 +421,6 @@ router.delete('/all-data', validateAccessToken, async (req, res) => {
     };
 
     const weeklyScores = await dynamoClient.send(new ScanCommand(scoreParams));
-    
-    console.log(`Found ${weeklyScores.Items?.length || 0} weekly scores to delete`);
     
     if (weeklyScores.Items && weeklyScores.Items.length > 0) {
       const deleteRequests = weeklyScores.Items.map((item: any) => ({
