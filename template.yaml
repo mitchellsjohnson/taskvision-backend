@@ -24,6 +24,14 @@ Parameters:
   TableName:
     Type: String
     Description: The name of the DynamoDB table
+  OpenAIApiKey:
+    Type: String
+    Description: The OpenAI API key for TVAgent functionality
+    NoEcho: true
+  OpenAIAssistantId:
+    Type: String
+    Description: The OpenAI Assistant ID for TVAgent functionality
+    NoEcho: true
   Version:
     Type: String
     Description: Version of the deployment
@@ -81,6 +89,8 @@ Resources:
           CLIENT_ORIGIN_URL: !Ref ClientOriginUrl
           AUTH0_DOMAIN: !Ref Auth0Domain
           AUTH0_AUDIENCE: !Ref Auth0Audience
+          OPENAI_API_KEY: !Ref OpenAIApiKey
+          OPENAI_ASSISTANT_ID: !Ref OpenAIAssistantId
           VERSION: !Ref Version
       Tags:
         Version: !Ref Version
