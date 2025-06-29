@@ -35,25 +35,23 @@ const SCORE_WEIGHTS: Record<WellnessPractice, { frequency: 'daily' | 'weekly'; m
  * Supports timezone-aware calculations
  */
 export function getWeekStart(date: Date, timezone?: string): string {
-  let d: Date;
+  // Create a new date to avoid mutating the original
+  const d = new Date(date);
   
-  if (timezone) {
-    // Convert to specified timezone
-    const dateInTimezone = new Date(date.toLocaleString("en-US", {timeZone: timezone}));
-    d = dateInTimezone;
-  } else {
-    // Use local timezone
-    d = new Date(date);
-  }
+  // Get the day of week (0 = Sunday, 1 = Monday, etc.)
+  const day = d.getUTCDay();
   
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
-  d.setDate(diff);
+  // Calculate days to subtract to get to Monday
+  const daysToMonday = day === 0 ? 6 : day - 1;
   
-  // Return in YYYY-MM-DD format
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const dayOfMonth = String(d.getDate()).padStart(2, '0');
+  // Subtract days to get to Monday using UTC methods to avoid timezone issues
+  const mondayDate = new Date(d);
+  mondayDate.setUTCDate(d.getUTCDate() - daysToMonday);
+  
+  // Return in YYYY-MM-DD format using UTC methods
+  const year = mondayDate.getUTCFullYear();
+  const month = String(mondayDate.getUTCMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(mondayDate.getUTCDate()).padStart(2, '0');
   
   return `${year}-${month}-${dayOfMonth}`;
 }

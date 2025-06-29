@@ -1,0 +1,40 @@
+version: '3.8'
+
+# Create a dedicated network for TaskVision
+networks:
+  taskvision-network:
+    driver: bridge
+
+# TaskVision-specific volumes
+volumes:
+  taskvision-dynamodb-data:
+    driver: local
+
+services:
+  taskvision-dynamodb:
+    image: "amazon/dynamodb-local:latest"
+    container_name: taskvision-dynamodb-local
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    ports:
+      - "8000:8000"  # You can change this if port 8000 conflicts with other apps
+    volumes:
+      - taskvision-dynamodb-data:/home/dynamodblocal/data
+    working_dir: /home/dynamodblocal
+    environment:
+      - JAVA_OPTS=-Xmx1g
+    networks:
+      - taskvision-network
+    restart: unless-stopped
+
+  taskvision-dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    container_name: taskvision-dynamodb-admin
+    ports:
+      - "8001:8001"  # You can change this if port 8001 conflicts with other apps
+    environment:
+      - DYNAMO_ENDPOINT=http://taskvision-dynamodb:8000
+    depends_on:
+      - taskvision-dynamodb
+    networks:
+      - taskvision-network
+    restart: unless-stopped 
