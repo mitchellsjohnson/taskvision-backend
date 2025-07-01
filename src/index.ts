@@ -50,23 +50,24 @@ app.use(
   })
 );
 
-// Unified CORS configuration
-const corsOptions: cors.CorsOptions = {
-  origin: CLIENT_ORIGIN_URL,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Authorization",
-    "Content-Type",
-    "X-Amz-Date",
-    "X-Api-Key",
-    "X-Amz-Security-Token",
-  ],
-  credentials: true,
-  maxAge: 86400,
-};
+// CORS is handled by Lambda function, not Express
+// Commenting out to avoid duplicate headers
+// const corsOptions: cors.CorsOptions = {
+//   origin: CLIENT_ORIGIN_URL,
+//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//   allowedHeaders: [
+//     "Authorization",
+//     "Content-Type",
+//     "X-Amz-Date",
+//     "X-Api-Key",
+//     "X-Amz-Security-Token",
+//   ],
+//   credentials: true,
+//   maxAge: 86400,
+// };
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// app.use(cors(corsOptions));
+// app.options("*", cors(corsOptions));
 
 // Standard content type
 app.use((req: Request, res: Response, next: NextFunction) => {

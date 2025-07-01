@@ -24,28 +24,34 @@ export const main = async (
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> => {
+  const origin = event.headers.origin || event.headers.Origin;
+  const allowedOrigin = 'https://taskvision.ai';
+  
+  // CORS headers to add to all responses
   const corsHeaders = {
-    'Access-Control-Allow-Origin': process.env.CLIENT_ORIGIN_URL || 'https://taskvision.ai',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, X-Requested-With, X-Amz-Date, X-Api-Key, X-Amz-Security-Token',
+    'Access-Control-Allow-Origin': origin === allowedOrigin ? allowedOrigin : 'null',
     'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Amz-Date, X-Api-Key, X-Amz-Security-Token',
   };
 
-  // Handle CORS preflight
+  // Handle preflight OPTIONS requests
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Max-Age': '86400',
+      },
       body: '',
     };
   }
 
   try {
-    // Pass through to Express app
+    // Get response from Express app
     const result = (await handler(event, context)) as APIGatewayProxyResult;
     
-    // Ensure CORS headers are always present
+    // Add CORS headers to the response
     return {
       ...result,
       headers: {
