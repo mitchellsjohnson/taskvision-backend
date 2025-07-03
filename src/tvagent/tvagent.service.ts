@@ -167,6 +167,15 @@ Examples: "john is hosting at Fancy Restaurant" → CREATE dinner task with thos
 - Auto-detect self-care tasks: yoga, meditation, walks, family time, etc.
 - Suggest quick wins when MITs are blocked or in progress
 
+📅 OVERDUE TASK HANDLING - CRITICAL:
+When users ask about overdue tasks, ALWAYS use get_tasks with dateFilter: "pastDue":
+- "what tasks are overdue?" → get_tasks with dateFilter: "pastDue"
+- "show me overdue tasks" → get_tasks with dateFilter: "pastDue"
+- "what's past due?" → get_tasks with dateFilter: "pastDue"
+- "overdue items" → get_tasks with dateFilter: "pastDue"
+- If no overdue tasks found, respond: "🎉 Great news! You don't have any overdue tasks right now. You're staying on top of things!"
+- If overdue tasks found, prioritize them and suggest tackling them first
+
 🔍 PERFECT CONTEXT RETENTION & INTELLIGENT INFERENCE:
 - Remember EVERYTHING from our conversation when possible
 - CRITICAL: Even if conversation history is lost, use INTELLIGENT CONTEXT CLUES from the current message
@@ -1079,21 +1088,94 @@ Be practical and specific. Format as a clear, actionable plan.`;
 
       case 'get_tasks':
         try {
-          const tasks = await getTasksForUser(userId, {
+          // Prepare filters with proper date parameters
+          const filters: any = {
             status: args.status,
             tags: args.tags,
             search: args.search,
             dateFilter: args.dateFilter
-          });
+          };
+          
+          // Add required date parameters based on dateFilter
+          if (args.dateFilter) {
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (args.dateFilter === 'pastDue') {
+              filters.endDate = today;
+            } else if (args.dateFilter === 'dueToday') {
+              filters.startDate = today;
+            } else if (args.dateFilter === 'dueThisWeek') {
+              const weekFromNow = new Date();
+              weekFromNow.setDate(weekFromNow.getDate() + 7);
+              filters.startDate = today;
+              filters.endDate = weekFromNow.toISOString().split('T')[0];
+            } else if (args.dateFilter === 'dueThisMonth') {
+              const monthFromNow = new Date();
+              monthFromNow.setMonth(monthFromNow.getMonth() + 1);
+              filters.startDate = today;
+              filters.endDate = monthFromNow.toISOString().split('T')[0];
+            }
+          }
+          
+          const tasks = await getTasksForUser(userId, filters);
           
           if (!tasks || tasks.length === 0) {
+            // Handle specific date filter queries with no results
+            if (args.dateFilter === 'pastDue') {
+              return {
+                message: "🎉 Great news! You don't have any overdue tasks right now. You're staying on top of things!",
+                data: []
+              };
+            } else if (args.dateFilter === 'dueToday') {
+              return {
+                message: "🎯 No tasks due today! Perfect time to get ahead or take a well-deserved break.",
+                data: []
+              };
+            } else {
+              return {
+                message: "You're all caught up! 🎉 No active tasks right now. Want to add something new or maybe take a well-deserved break?",
+                data: []
+              };
+            }
+          }
+
+          // Handle specific date filter responses
+          if (args.dateFilter === 'pastDue') {
+            // For overdue tasks, all returned tasks are overdue
+            const mitTasks = tasks.filter(task => task.isMIT);
+            let message = `📅 Hey Mitchell! You've got ${tasks.length} overdue task${tasks.length > 1 ? 's' : ''} that need attention. `;
+            message += "Let's tackle these first to clear your mind! ";
+            
+            if (mitTasks.length > 0) {
+              message += `Your overdue MITs: **${mitTasks.map(t => t.title).join('**, **')}**. `;
+            }
+            
+            message += "Which one should we start with?";
+            
             return {
-              message: "You're all caught up! 🎉 No active tasks right now. Want to add something new or maybe take a well-deserved break?",
-              data: []
+              message,
+              data: tasks
+            };
+          }
+          
+          if (args.dateFilter === 'dueToday') {
+            // For due today tasks, all returned tasks are due today
+            const mitTasks = tasks.filter(task => task.isMIT);
+            let message = `🎯 You have ${tasks.length} task${tasks.length > 1 ? 's' : ''} due today. `;
+            
+            if (mitTasks.length > 0) {
+              message += `Your MITs for today: **${mitTasks.map(t => t.title).join('**, **')}**. `;
+            }
+            
+            message += "Ready to tackle them?";
+            
+            return {
+              message,
+              data: tasks
             };
           }
 
-          // Analyze the tasks for a more intelligent response
+          // For general task queries, analyze the tasks for a more intelligent response
           const mitTasks = tasks.filter(task => task.isMIT);
           const overdueTasks = tasks.filter(task => {
             if (!task.dueDate) return false;

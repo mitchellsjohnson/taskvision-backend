@@ -28,6 +28,8 @@ if (!CLIENT_ORIGIN_URL) {
   throw new Error("Missing CLIENT_ORIGIN_URL environment variable.");
 }
 
+console.log('CORS configured for origin:', CLIENT_ORIGIN_URL);
+
 export const app = express();
 const apiRouter = express.Router();
 
@@ -50,23 +52,24 @@ app.use(
   })
 );
 
-// Unified CORS configuration
-const corsOptions: cors.CorsOptions = {
-  origin: CLIENT_ORIGIN_URL,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Authorization",
-    "Content-Type",
-    "X-Amz-Date",
-    "X-Api-Key",
-    "X-Amz-Security-Token",
-  ],
-  credentials: true,
-  maxAge: 86400,
-};
+// CORS is handled by Lambda function to avoid serverless-http issues
+// Express CORS middleware doesn't work reliably with serverless-http
+// const corsOptions: cors.CorsOptions = {
+//   origin: CLIENT_ORIGIN_URL,
+//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//   allowedHeaders: [
+//     "Authorization",
+//     "Content-Type",
+//     "X-Amz-Date",
+//     "X-Api-Key",
+//     "X-Amz-Security-Token",
+//   ],
+//   credentials: true,
+//   maxAge: 86400,
+// };
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// app.use(cors(corsOptions));
+// app.options("*", cors(corsOptions));
 
 // Standard content type
 app.use((req: Request, res: Response, next: NextFunction) => {
