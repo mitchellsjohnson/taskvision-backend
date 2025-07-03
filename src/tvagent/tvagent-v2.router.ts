@@ -30,25 +30,71 @@ const checkServiceAvailable = (req: Request, res: Response, next: any) => {
  * Send a message to TVAgent using ChatGPT Assistants API
  */
 router.post('/message', validateAccessToken, checkServiceAvailable, async (req: Request, res: Response) => {
+  const requestId = Math.random().toString(36).substring(7);
+  const startTime = Date.now();
+  
   try {
+    console.log(`=== TVAGENT V2 MESSAGE START [${requestId}] ===`);
+    console.log('TVAgent V2 request details:', {
+      requestId,
+      userId: getUserId(req),
+      hasMessage: !!req.body.message,
+      messageLength: req.body.message?.length || 0,
+      threadId: req.body.threadId || 'new',
+      timestamp: new Date().toISOString(),
+      origin: req.get('origin'),
+      userAgent: req.get('user-agent')
+    });
+    
     const { message, threadId } = req.body;
     const userId = getUserId(req);
 
     if (!message || typeof message !== 'string') {
+      console.log(`Invalid message format [${requestId}]:`, { message: typeof message, length: message?.length });
       return res.status(400).json({
         success: false,
         message: 'Message is required and must be a string'
       });
     }
 
+    console.log(`Calling TVAgent service [${requestId}]...`);
     const result = await tvAgentV2Service!.sendMessage(userId, message, threadId);
-
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log(`TVAgent V2 success [${requestId}]:`, {
+      duration: `${duration}ms`,
+      hasResult: !!result,
+      resultKeys: result ? Object.keys(result) : [],
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`=== TVAGENT V2 MESSAGE COMPLETE [${requestId}] ===`);
     res.json(result);
+    
   } catch (error) {
-    console.error('TVAgent V2 message error:', error);
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.error(`=== TVAGENT V2 MESSAGE ERROR [${requestId}] ===`);
+    console.error('TVAgent V2 error details:', {
+      requestId,
+      duration: `${duration}ms`,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      errorStack: error instanceof Error ? error.stack : 'No stack trace',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Log the full error object for debugging
+    console.error('Full error object:', error);
+    
     res.status(500).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Internal server error'
+      message: error instanceof Error ? error.message : 'Internal server error',
+      requestId,
+      timestamp: new Date().toISOString()
     });
   }
 });

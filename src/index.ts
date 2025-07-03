@@ -37,6 +37,69 @@ const apiRouter = express.Router();
 app.use(express.json());
 app.set("json spaces", 2);
 
+// Production monitoring middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substring(7);
+  
+  console.log(`=== EXPRESS REQUEST START [${requestId}] ===`);
+  console.log('Request details:', {
+    requestId,
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    query: req.query,
+    origin: req.get('origin'),
+    referer: req.get('referer'),
+    userAgent: req.get('user-agent'),
+    host: req.get('host'),
+    contentType: req.get('content-type'),
+    authorization: req.get('authorization') ? '[PRESENT]' : '[MISSING]',
+    timestamp: new Date().toISOString()
+  });
+  
+  // Log all headers for debugging
+  console.log('All request headers:', req.headers);
+  
+  // Override res.json to log responses
+  const originalJson = res.json;
+  res.json = function(body: any) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log(`Express response [${requestId}]:`, {
+      statusCode: res.statusCode,
+      duration: `${duration}ms`,
+      bodyPreview: typeof body === 'object' ? JSON.stringify(body).substring(0, 200) + '...' : body,
+      headers: res.getHeaders(),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`=== EXPRESS REQUEST COMPLETE [${requestId}] ===`);
+    return originalJson.call(this, body);
+  };
+  
+  // Override res.send to log responses
+  const originalSend = res.send;
+  res.send = function(body: any) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    console.log(`Express response [${requestId}]:`, {
+      statusCode: res.statusCode,
+      duration: `${duration}ms`,
+      bodyPreview: typeof body === 'string' ? body.substring(0, 200) + '...' : body,
+      headers: res.getHeaders(),
+      timestamp: new Date().toISOString()
+    });
+    
+    console.log(`=== EXPRESS REQUEST COMPLETE [${requestId}] ===`);
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
+
 // Security headers
 app.use(
   helmet({
