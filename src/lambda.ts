@@ -33,12 +33,6 @@ export const main = async (
     CLIENT_ORIGIN_URL = 'https://taskvision.ai'; // fallback
   }
 
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': CLIENT_ORIGIN_URL,
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Amz-Date, X-Api-Key, X-Amz-Security-Token',
-  };
 
   // Enhanced logging for production debugging
   console.log('=== LAMBDA REQUEST START ===');
@@ -64,25 +58,9 @@ export const main = async (
   console.log('CORS configuration:', {
     CLIENT_ORIGIN_URL,
     NODE_ENV: process.env.NODE_ENV,
-    corsHeaders
   });
 
-  // Handle OPTIONS preflight at Lambda level
-  if (event.httpMethod === 'OPTIONS') {
-    console.log('=== HANDLING OPTIONS PREFLIGHT ===');
-    console.log('Preflight request from origin:', event.headers.origin || event.headers.Origin);
-    const preflightResponse = {
-      statusCode: 200,
-      headers: {
-        ...corsHeaders,
-        'Access-Control-Max-Age': '86400',
-      },
-      body: '',
-    };
-    console.log('Preflight response:', preflightResponse);
-    console.log('=== OPTIONS PREFLIGHT COMPLETE ===');
-    return preflightResponse;
-  }
+  // Let Express handle all CORS including OPTIONS preflight  }
 
   try {
     console.log('=== CALLING EXPRESS HANDLER ===');
@@ -108,7 +86,7 @@ export const main = async (
     const finalResponse = {
       ...result,
       headers: {
-        ...corsHeaders,
+        
         ...result.headers,
       },
     };
@@ -135,7 +113,7 @@ export const main = async (
     const errorResponse = {
       statusCode: 500,
       headers: {
-        ...corsHeaders,
+        
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ 
