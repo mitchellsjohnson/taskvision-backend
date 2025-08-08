@@ -51,3 +51,9 @@ samconfig.*.toml
 
 # SAM local env config
 env.json
+dynamodb-data/
+
+# Log files
+*.log
+frontend.log
+backend.log

@@ -49,7 +49,7 @@ describe("Tasks API", () => {
       expect(res.statusCode).toEqual(200);
       expect(res.body).toEqual(mockTasks);
       expect(mockedTaskOperations.getTasksForUser).toHaveBeenCalledWith(
-        "test-user-id",
+        "dev-user-id",
         {}
       );
     });
@@ -82,7 +82,7 @@ describe("Tasks API", () => {
       expect(res.statusCode).toEqual(201);
       expect(res.body).toEqual(createdTask);
       expect(mockedTaskOperations.createTask).toHaveBeenCalledWith(
-        "test-user-id",
+        "dev-user-id",
         newTaskData
       );
     });
@@ -140,7 +140,7 @@ describe("Tasks API", () => {
 
       expect(res.statusCode).toEqual(200);
       expect(res.body).toEqual(updatedTask);
-      expect(mockedTaskOperations.updateTask).toHaveBeenCalledWith("test-user-id", taskId, updateData);
+      expect(mockedTaskOperations.updateTask).toHaveBeenCalledWith("dev-user-id", taskId, updateData);
     });
 
     it("should return a 400 status code if status is invalid", async () => {
@@ -160,7 +160,220 @@ describe("Tasks API", () => {
         const res = await request(app).delete(`/api/tasks/${taskId}`);
 
         expect(res.statusCode).toEqual(204);
-        expect(mockedTaskOperations.deleteTask).toHaveBeenCalledWith("test-user-id", taskId);
+        expect(mockedTaskOperations.deleteTask).toHaveBeenCalledWith("dev-user-id", taskId);
+    });
+  });
+
+  // Dashboard API Endpoints Tests
+  describe("GET /api/tasks/metrics", () => {
+    it("should return productivity metrics with a 200 status code", async () => {
+      const mockMetrics = {
+        completedTasks: 5,
+        createdTasks: 10,
+        completedMITs: 2,
+        createdMITs: 3,
+        taskScore: 0.5,
+        mitScore: 0.67,
+        finalScore: 57
+      };
+      mockedTaskOperations.getProductivityMetrics.mockResolvedValue(mockMetrics);
+
+      const res = await request(app).get("/api/tasks/metrics");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockMetrics);
+      expect(mockedTaskOperations.getProductivityMetrics).toHaveBeenCalledWith("dev-user-id", 7);
+    });
+
+    it("should accept custom days parameter", async () => {
+      const mockMetrics = {
+        completedTasks: 3,
+        createdTasks: 6,
+        completedMITs: 1,
+        createdMITs: 2,
+        taskScore: 0.5,
+        mitScore: 0.5,
+        finalScore: 50
+      };
+      mockedTaskOperations.getProductivityMetrics.mockResolvedValue(mockMetrics);
+
+      const res = await request(app).get("/api/tasks/metrics?days=30");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockMetrics);
+      expect(mockedTaskOperations.getProductivityMetrics).toHaveBeenCalledWith("dev-user-id", 30);
+    });
+
+    it("should return 400 for invalid days parameter", async () => {
+      const res = await request(app).get("/api/tasks/metrics?days=0");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Days parameter must be between 1 and 365");
+    });
+
+    it("should return 400 for days parameter too large", async () => {
+      const res = await request(app).get("/api/tasks/metrics?days=400");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Days parameter must be between 1 and 365");
+    });
+
+    it("should handle errors from getProductivityMetrics", async () => {
+      mockedTaskOperations.getProductivityMetrics.mockRejectedValue(new Error("Database error"));
+
+      const res = await request(app).get("/api/tasks/metrics");
+
+      expect(res.statusCode).toEqual(500);
+      expect(res.body.message).toEqual("Error fetching productivity metrics");
+    });
+  });
+
+  describe("GET /api/tasks/activity", () => {
+    it("should return recent activity with a 200 status code", async () => {
+      const mockActivity = [
+        {
+          id: "completion_task1",
+          type: "completion" as const,
+          taskId: "task1",
+          taskTitle: "Complete project",
+          timestamp: "2023-01-01T12:00:00.000Z",
+          details: {}
+        },
+        {
+          id: "priority_task2",
+          type: "priority_change" as const,
+          taskId: "task2",
+          taskTitle: "Review code",
+          timestamp: "2023-01-01T11:00:00.000Z",
+          details: { newValue: "MIT" }
+        }
+      ];
+      mockedTaskOperations.getRecentActivity.mockResolvedValue(mockActivity);
+
+      const res = await request(app).get("/api/tasks/activity");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockActivity);
+      expect(mockedTaskOperations.getRecentActivity).toHaveBeenCalledWith("dev-user-id", 5);
+    });
+
+    it("should accept custom limit parameter", async () => {
+      const mockActivity = [
+        {
+          id: "completion_task1",
+          type: "completion" as const,
+          taskId: "task1",
+          taskTitle: "Complete project",
+          timestamp: "2023-01-01T12:00:00.000Z",
+          details: {}
+        }
+      ];
+      mockedTaskOperations.getRecentActivity.mockResolvedValue(mockActivity);
+
+      const res = await request(app).get("/api/tasks/activity?limit=10");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockActivity);
+      expect(mockedTaskOperations.getRecentActivity).toHaveBeenCalledWith("dev-user-id", 10);
+    });
+
+    it("should return 400 for invalid limit parameter", async () => {
+      const res = await request(app).get("/api/tasks/activity?limit=0");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Limit parameter must be between 1 and 50");
+    });
+
+    it("should return 400 for limit parameter too large", async () => {
+      const res = await request(app).get("/api/tasks/activity?limit=100");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Limit parameter must be between 1 and 50");
+    });
+
+    it("should handle errors from getRecentActivity", async () => {
+      mockedTaskOperations.getRecentActivity.mockRejectedValue(new Error("Database error"));
+
+      const res = await request(app).get("/api/tasks/activity");
+
+      expect(res.statusCode).toEqual(500);
+      expect(res.body.message).toEqual("Error fetching recent activity");
+    });
+  });
+
+  describe("GET /api/tasks/upcoming", () => {
+    it("should return upcoming tasks with a 200 status code", async () => {
+      const mockUpcomingTasks = [
+        {
+          TaskId: "task1",
+          title: "Due tomorrow",
+          description: "Important task",
+          dueDate: "2023-01-02",
+          status: "Open",
+          isMIT: true,
+          priority: 1,
+          creationDate: "2023-01-01T00:00:00.000Z",
+          modifiedDate: "2023-01-01T00:00:00.000Z"
+        },
+        {
+          TaskId: "task2",
+          title: "Due next week",
+          description: "Regular task",
+          dueDate: "2023-01-07",
+          status: "Open",
+          isMIT: false,
+          priority: 2,
+          creationDate: "2023-01-01T00:00:00.000Z",
+          modifiedDate: "2023-01-01T00:00:00.000Z"
+        }
+      ];
+      mockedTaskOperations.getUpcomingTasks.mockResolvedValue(mockUpcomingTasks as any);
+
+      const res = await request(app).get("/api/tasks/upcoming");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockUpcomingTasks);
+      expect(mockedTaskOperations.getUpcomingTasks).toHaveBeenCalledWith("dev-user-id", 7);
+    });
+
+    it("should accept custom days parameter", async () => {
+      const mockUpcomingTasks = [
+        {
+          TaskId: "task1",
+          title: "Due this month",
+          description: "Monthly task",
+          dueDate: "2023-01-15",
+          status: "Open",
+          isMIT: false,
+          priority: 1,
+          creationDate: "2023-01-01T00:00:00.000Z",
+          modifiedDate: "2023-01-01T00:00:00.000Z"
+        }
+      ];
+      mockedTaskOperations.getUpcomingTasks.mockResolvedValue(mockUpcomingTasks as any);
+
+      const res = await request(app).get("/api/tasks/upcoming?days=30");
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body).toEqual(mockUpcomingTasks);
+      expect(mockedTaskOperations.getUpcomingTasks).toHaveBeenCalledWith("dev-user-id", 30);
+    });
+
+    it("should return 400 for invalid days parameter", async () => {
+      const res = await request(app).get("/api/tasks/upcoming?days=0");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Days parameter must be between 1 and 365");
+    });
+
+    it("should return 400 for days parameter too large", async () => {
+      const res = await request(app).get("/api/tasks/upcoming?days=400");
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.message).toContain("Days parameter must be between 1 and 365");
+    });
+
+    it("should handle errors from getUpcomingTasks", async () => {
+      mockedTaskOperations.getUpcomingTasks.mockRejectedValue(new Error("Database error"));
+
+      const res = await request(app).get("/api/tasks/upcoming");
+
+      expect(res.statusCode).toEqual(500);
+      expect(res.body.message).toEqual("Error fetching upcoming tasks");
     });
   });
 }); 

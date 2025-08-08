@@ -11,6 +11,7 @@ import { ulid } from "ulid";
 import docClient from "./dynamo";
 import { Task } from '../types';
 import { validateTaskData } from '../utils/validation';
+import { logTaskAuditEvent } from './audit-operations';
 
 const TABLE_NAME = process.env.TABLE_NAME || "TaskVision";
 
@@ -69,11 +70,26 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
   try {
     await docClient.send(command);
     
+    // Log audit event for task creation
+    await logTaskAuditEvent(userId, {
+      taskId,
+      taskTitle: task.title,
+      action: 'created',
+      newValues: {
+        status: task.status,
+        isMIT: task.isMIT,
+        priority: task.priority,
+        dueDate: task.dueDate
+      },
+      timestamp: now
+    });
+    
     // Trigger reprioritization to handle the new task's position
     await reprioritizeTasks(userId, taskId, (taskData.priority || 1) - 1);
     
     return task;
   } catch (error) {
+    console.error("Error creating task:", error);
     throw new Error("Could not create task.");
   }
 };
@@ -339,9 +355,53 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
   };
 
   try {
+    // Get the current task state for audit logging
+    const currentTask = await getTask(userId, taskId);
+    
     const command = new UpdateCommand(params);
     const result: UpdateCommandOutput = await docClient.send(command);
     const updatedTask = result.Attributes as Task | null;
+
+    // Log audit event for task update
+    if (currentTask && updatedTask) {
+      const oldValues: Record<string, any> = {};
+      const newValues: Record<string, any> = {};
+      
+      // Track significant changes
+      if (currentTask.status !== updatedTask.status) {
+        oldValues.status = currentTask.status;
+        newValues.status = updatedTask.status;
+      }
+      
+      if (currentTask.isMIT !== updatedTask.isMIT) {
+        oldValues.isMIT = currentTask.isMIT;
+        newValues.isMIT = updatedTask.isMIT;
+      }
+      
+      if (currentTask.priority !== updatedTask.priority) {
+        oldValues.priority = currentTask.priority;
+        newValues.priority = updatedTask.priority;
+      }
+
+      // Determine the action type
+      let action: 'updated' | 'completed' | 'status_changed' | 'priority_changed' = 'updated';
+      if (newValues.status === 'Completed') {
+        action = 'completed';
+      } else if (newValues.status && newValues.status !== oldValues.status) {
+        action = 'status_changed';
+      } else if (newValues.isMIT !== undefined || newValues.priority !== undefined) {
+        action = 'priority_changed';
+      }
+
+      await logTaskAuditEvent(userId, {
+        taskId,
+        taskTitle: updatedTask.title,
+        action,
+        oldValues: Object.keys(oldValues).length > 0 ? oldValues : undefined,
+        newValues: Object.keys(newValues).length > 0 ? newValues : undefined,
+        timestamp: modifiedDate
+      });
+    }
 
     // After the main update, if isMIT was changed, trigger reprioritization
     if (updateData.isMIT !== undefined) {
@@ -350,24 +410,265 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
 
     return updatedTask;
   } catch (error) {
+    console.error("Error updating task:", error);
     throw new Error("Could not update task.");
   }
 }
 
 export const deleteTask = async (userId: string, taskId: string) => {
-  const command = new DeleteCommand({
-    TableName: TABLE_NAME,
-    Key: {
-      PK: `USER#${userId}`,
-      SK: `TASK#${taskId}`,
-    },
-  });
-
   try {
+    // Get the task before deletion for audit logging
+    const taskToDelete = await getTask(userId, taskId);
+    
+    const command = new DeleteCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `TASK#${taskId}`,
+      },
+    });
+
     await docClient.send(command);
+    
+    // Log audit event for task deletion
+    if (taskToDelete) {
+      await logTaskAuditEvent(userId, {
+        taskId,
+        taskTitle: taskToDelete.title,
+        action: 'deleted',
+        oldValues: {
+          status: taskToDelete.status,
+          isMIT: taskToDelete.isMIT,
+          priority: taskToDelete.priority
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     return { success: true, message: "Task deleted successfully" };
   } catch (error) {
     console.error("Error deleting task:", error);
     throw new Error("Could not delete task.");
+  }
+};
+
+// Dashboard API Operations
+
+export interface ProductivityMetrics {
+  completedTasks: number;
+  createdTasks: number;
+  completedMITs: number;
+  createdMITs: number;
+  taskScore: number;
+  mitScore: number;
+  finalScore: number;
+}
+
+export const getProductivityMetrics = async (userId: string, days: number = 7): Promise<ProductivityMetrics> => {
+  const daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - days);
+  const cutoffDate = daysAgo.toISOString();
+
+  const params = {
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    ExpressionAttributeValues: {
+      ":pk": `USER#${userId}`,
+      ":sk": "TASK#",
+    },
+    ProjectionExpression: "TaskId, #st, isMIT, creationDate, completedDate",
+    ExpressionAttributeNames: {
+      "#st": "status",
+    },
+  };
+
+  try {
+    const result = await docClient.send(new QueryCommand(params));
+    const tasks = result.Items || [];
+
+    // Filter tasks created in the specified time period (excluding canceled)
+    const tasksInPeriod = tasks.filter(task => 
+      task.creationDate >= cutoffDate && task.status !== 'Canceled'
+    );
+
+    // Calculate metrics
+    const completedTasks = tasksInPeriod.filter(task => 
+      task.status === 'Completed' && task.completedDate >= cutoffDate
+    ).length;
+
+    const createdTasks = tasksInPeriod.length;
+
+    const mitsInPeriod = tasksInPeriod.filter(task => task.isMIT);
+    const completedMITs = mitsInPeriod.filter(task => 
+      task.status === 'Completed' && task.completedDate >= cutoffDate
+    ).length;
+
+    const createdMITs = mitsInPeriod.length;
+
+    // Calculate scores
+    const taskScore = createdTasks > 0 ? completedTasks / createdTasks : 0;
+    const mitScore = createdMITs > 0 ? completedMITs / createdMITs : 0;
+    const finalScore = Math.round((taskScore * 0.6 + mitScore * 0.4) * 100);
+
+    return {
+      completedTasks,
+      createdTasks,
+      completedMITs,
+      createdMITs,
+      taskScore,
+      mitScore,
+      finalScore
+    };
+  } catch (error) {
+    console.error("Error fetching productivity metrics:", error);
+    throw new Error("Could not fetch productivity metrics.");
+  }
+};
+
+export interface ActivityEntry {
+  id: string;
+  type: 'completion' | 'priority_change' | 'creation' | 'status_change';
+  taskId: string;
+  taskTitle: string;
+  timestamp: string;
+  details: {
+    oldValue?: string;
+    newValue?: string;
+  };
+}
+
+export const getRecentActivity = async (userId: string, limit: number = 5): Promise<ActivityEntry[]> => {
+  // For now, we'll get recent task completions and status changes
+  // In a full implementation, this would query a dedicated activity log
+  const params = {
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    ExpressionAttributeValues: {
+      ":pk": `USER#${userId}`,
+      ":sk": "TASK#",
+    },
+    ProjectionExpression: "TaskId, #title, #st, completedDate, modifiedDate, isMIT",
+    ExpressionAttributeNames: {
+      "#title": "title",
+      "#st": "status",
+    },
+  };
+
+  try {
+    const result = await docClient.send(new QueryCommand(params));
+    const tasks = result.Items || [];
+
+    const activities: ActivityEntry[] = [];
+
+    // Add completion activities
+    tasks
+      .filter(task => task.status === 'Completed' && task.completedDate)
+      .sort((a, b) => new Date(b.completedDate).getTime() - new Date(a.completedDate).getTime())
+      .slice(0, limit)
+      .forEach(task => {
+        activities.push({
+          id: `completion_${task.TaskId}`,
+          type: 'completion',
+          taskId: task.TaskId,
+          taskTitle: task.title,
+          timestamp: task.completedDate,
+          details: {}
+        });
+      });
+
+    // Add priority change activities (MIT status changes)
+    tasks
+      .filter(task => task.modifiedDate)
+      .sort((a, b) => new Date(b.modifiedDate).getTime() - new Date(a.modifiedDate).getTime())
+      .slice(0, limit * 2) // Get more to filter for actual priority changes
+      .forEach(task => {
+        if (task.isMIT) {
+          activities.push({
+            id: `priority_${task.TaskId}`,
+            type: 'priority_change',
+            taskId: task.TaskId,
+            taskTitle: task.title,
+            timestamp: task.modifiedDate,
+            details: {
+              newValue: 'MIT'
+            }
+          });
+        }
+      });
+
+    // Sort all activities by timestamp and return the most recent
+    return activities
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+
+  } catch (error) {
+    console.error("Error fetching recent activity:", error);
+    throw new Error("Could not fetch recent activity.");
+  }
+};
+
+export const getUpcomingTasks = async (userId: string, days: number = 7): Promise<Task[]> => {
+  const today = new Date();
+  const futureDate = new Date();
+  futureDate.setDate(today.getDate() + days);
+  
+  const futureDateStr = futureDate.toISOString().split('T')[0];
+
+  const params = {
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    ExpressionAttributeValues: {
+      ":pk": `USER#${userId}`,
+      ":sk": "TASK#",
+      ":futureDateStr": futureDateStr,
+      ":emptyValue": "",
+    },
+    FilterExpression: "#st = :openStatus AND attribute_exists(#dueDate) AND #dueDate <> :emptyValue AND #dueDate <= :futureDateStr",
+    ProjectionExpression: "TaskId, #title, #description, dueDate, #st, isMIT, priority, creationDate, modifiedDate",
+    ExpressionAttributeNames: {
+      "#title": "title",
+      "#description": "description",
+      "#st": "status",
+      "#dueDate": "dueDate",
+    },
+  };
+
+  // Add the open status value
+  (params.ExpressionAttributeValues as any)[":openStatus"] = "Open";
+
+  try {
+    const result = await docClient.send(new QueryCommand(params));
+    const tasks = (result.Items || []) as Task[];
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Sort by urgency: overdue first, then due today, then future dates (earliest first)
+    return tasks.sort((a, b) => {
+      if (!a.dueDate || !b.dueDate) return 0;
+      
+      const aIsOverdue = a.dueDate < today;
+      const bIsOverdue = b.dueDate < today;
+      const aIsDueToday = a.dueDate === today;
+      const bIsDueToday = b.dueDate === today;
+      
+      // Overdue tasks come first
+      if (aIsOverdue && !bIsOverdue) return -1;
+      if (bIsOverdue && !aIsOverdue) return 1;
+      
+      // If both are overdue, sort by earliest due date first (most overdue)
+      if (aIsOverdue && bIsOverdue) {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      
+      // Due today tasks come before future tasks
+      if (aIsDueToday && !bIsDueToday && !bIsOverdue) return -1;
+      if (bIsDueToday && !aIsDueToday && !aIsOverdue) return 1;
+      
+      // For all other cases, sort by due date (earliest first)
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+  } catch (error) {
+    console.error("Error fetching upcoming tasks:", error);
+    throw new Error("Could not fetch upcoming tasks.");
   }
 };

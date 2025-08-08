@@ -81,6 +81,7 @@ router.post('/practices', validateAccessToken, async (req, res) => {
       'Social Outreach',
       'Novelty Challenge',
       'Savoring Reflection',
+      'Exercise',
     ];
 
     if (!validPractices.includes(practice)) {
@@ -142,6 +143,7 @@ router.put('/practices/:date/:practice', validateAccessToken, async (req, res) =
       'Social Outreach',
       'Novelty Challenge',
       'Savoring Reflection',
+      'Exercise',
     ];
 
     if (!validPractices.includes(practice as WellnessPractice)) {
@@ -196,6 +198,7 @@ router.delete('/practices/:date/:practice', validateAccessToken, async (req, res
       'Social Outreach',
       'Novelty Challenge',
       'Savoring Reflection',
+      'Exercise',
     ];
 
     if (!validPractices.includes(practice as WellnessPractice)) {
@@ -277,6 +280,7 @@ router.get('/status', validateAccessToken, async (req, res) => {
       'Social Outreach': { completed: 0, target: 2 },
       'Novelty Challenge': { completed: 0, target: 2 },
       'Savoring Reflection': { completed: 0, target: 7 },
+      'Exercise': { completed: 0, target: 7 },
     };
 
     practices.forEach(practice => {

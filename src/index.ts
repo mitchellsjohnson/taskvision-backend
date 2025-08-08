@@ -115,24 +115,23 @@ app.use(
   })
 );
 
-// CORS is handled by Lambda function to avoid serverless-http issues
-// Express CORS middleware doesn't work reliably with serverless-http
-// const corsOptions: cors.CorsOptions = {
-//   origin: CLIENT_ORIGIN_URL,
-//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: [
-//     "Authorization",
-//     "Content-Type",
-//     "X-Amz-Date",
-//     "X-Api-Key",
-//     "X-Amz-Security-Token",
-//   ],
-//   credentials: true,
-//   maxAge: 86400,
-// };
+// CORS configuration for local development
+const corsOptions: cors.CorsOptions = {
+  origin: CLIENT_ORIGIN_URL,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type",
+    "X-Amz-Date",
+    "X-Api-Key",
+    "X-Amz-Security-Token",
+  ],
+  credentials: true,
+  maxAge: 86400,
+};
 
-// app.use(cors(corsOptions));
-// app.options("*", cors(corsOptions));
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Standard content type
 app.use((req: Request, res: Response, next: NextFunction) => {

@@ -1,0 +1,127 @@
+# TaskVision Backend - Cursor AI Rules
+
+## Project Overview
+TaskVision is a full-stack task management application. This is the backend API built with Express.js, TypeScript, and DynamoDB.
+
+## Architecture & Tech Stack
+- **Framework**: Express.js with TypeScript
+- **Database**: DynamoDB (AWS SDK v2 for local development, v3 for production)
+- **Authentication**: Auth0 JWT middleware
+- **Deployment**: AWS Lambda via SAM (Serverless Application Model)
+- **Local Development**: DynamoDB Local via Docker
+- **Testing**: Jest
+
+## Development Environment Setup
+- **Primary Script**: `./dev-server.sh` - Manages full-stack development environment
+- **Usage**: 
+  - `./dev-server.sh start` - Start all services (DynamoDB + Backend + Frontend)
+  - `./dev-server.sh restart` - Restart everything
+  - `./dev-server.sh status` - Check status
+  - `./dev-server.sh logs backend` - View backend logs
+
+### Local Environment Variables
+```
+IS_OFFLINE=true
+TABLE_NAME=TaskVision
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=fakeKey
+AWS_SECRET_ACCESS_KEY=fakeSecret
+```
+
+### Ports & Services
+- **Backend API**: http://localhost:6060
+- **DynamoDB Local**: http://localhost:8000
+- **Frontend**: http://localhost:4040 (managed by this script)
+
+## Database Schema (DynamoDB Single Table Design)
+- **Table Name**: TaskVision
+- **Primary Key**: PK (String), SK (String)
+- **GSI1**: GSI1PK (String), GSI1SK (String)
+- **Patterns**:
+  - Users: `PK: USER#${userId}`, `SK: PROFILE`
+  - Tasks: `PK: USER#${userId}`, `SK: TASK#${taskId}`
+  - Messages: `PK: USER#${userId}`, `SK: MESSAGE#${messageId}`
+
+## Code Standards & Patterns
+
+### TypeScript
+- Strict mode enabled
+- Always use explicit types for function parameters and returns
+- Prefer interfaces over types for object shapes
+- Use enums for constants with multiple values
+
+### Express.js Patterns
+- Route handlers in separate files (`*.router.ts`)
+- Business logic in services (`*.service.ts`)
+- Database operations in operations files (`*-operations.ts`)
+- Middleware in `/middleware` directory
+- Validation using custom validation utilities
+
+### Error Handling
+- Use custom error middleware (`error.middleware.ts`)
+- Always include proper HTTP status codes
+- Return consistent error response format:
+```typescript
+{
+  message: string;
+  error?: string;
+  details?: any;
+}
+```
+
+### Auth0 Integration
+- JWT validation via `auth0.middleware.ts`
+- User ID extraction via `get-user-id.ts`
+- Role-based access control via `role-validation.ts`
+
+### DynamoDB Operations
+- All database operations in `/db` directory
+- Use parameterized queries for security
+- Implement proper error handling for AWS operations
+- Use batch operations when possible for performance
+
+## File Organization
+```
+src/
+├── index.ts                 # Main server entry point
+├── lambda.ts               # Lambda handler for deployment
+├── auth/                   # Auth0 configuration
+├── db/                     # Database operations
+├── middleware/             # Express middleware
+├── messages/               # Message-related routes & services
+├── tasks/                  # Task-related routes & services
+├── tvagent/               # AI agent features
+├── users/                 # User-related functionality
+├── wellness/              # Wellness tracking features
+├── types.ts               # Shared TypeScript types
+└── utils/                 # Utility functions
+```
+
+## Testing
+- Test files: `*.test.ts` or in `__tests__/` directories
+- Use Jest with TypeScript
+- Mock external dependencies (AWS, Auth0)
+- Test database operations with local DynamoDB
+
+## Deployment
+- **Local**: `npm start` (with dev-server.sh for full stack)
+- **Build**: `npm run build`
+- **AWS Deploy**: `npm run sam:deploy`
+
+## Common Tasks
+1. **Add new route**: Create router + service + operations files
+2. **Database schema changes**: Update table creation scripts
+3. **New middleware**: Add to `/middleware` and register in routes
+4. **Environment changes**: Update template.yaml and local env vars
+
+## AI Assistant Instructions
+- Always use TypeScript with explicit typing
+- Follow existing patterns for routes, services, and database operations
+- Use the dev-server.sh script for development environment management
+- Reference existing middleware and error handling patterns
+- When adding database operations, use the established single-table design
+- For Auth0 integration, use existing middleware patterns
+- Always include proper error handling and validation 
+
+## MCP tool usage
+When adding dependencies to the system, make sure to leverage seaworthy tools to determine the best versions to use 

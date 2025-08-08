@@ -5,6 +5,9 @@ import {
   updateTask,
   deleteTask,
   getTasksForUser,
+  getProductivityMetrics,
+  getRecentActivity,
+  getUpcomingTasks,
 } from "../db/task-operations";
 import { Task } from '../types';
 
@@ -129,5 +132,64 @@ tasksRouter.delete("/:taskId", validateAccessToken, async (req: Request, res: Re
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error deleting task" });
+  }
+});
+
+// Dashboard API Endpoints
+
+// GET /api/tasks/metrics
+tasksRouter.get("/metrics", validateAccessToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const daysParam = req.query.days as string;
+    const days = daysParam ? parseInt(daysParam) : 7;
+    
+    if (isNaN(days) || days < 1 || days > 365) {
+      return res.status(400).json({ message: "Days parameter must be between 1 and 365" });
+    }
+
+    const metrics = await getProductivityMetrics(userId, days);
+    res.status(200).json(metrics);
+  } catch (error) {
+    console.error("Error fetching productivity metrics:", error);
+    res.status(500).json({ message: "Error fetching productivity metrics" });
+  }
+});
+
+// GET /api/tasks/activity
+tasksRouter.get("/activity", validateAccessToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const limitParam = req.query.limit as string;
+    const limit = limitParam ? parseInt(limitParam) : 5;
+    
+    if (isNaN(limit) || limit < 1 || limit > 50) {
+      return res.status(400).json({ message: "Limit parameter must be between 1 and 50" });
+    }
+
+    const activities = await getRecentActivity(userId, limit);
+    res.status(200).json(activities);
+  } catch (error) {
+    console.error("Error fetching recent activity:", error);
+    res.status(500).json({ message: "Error fetching recent activity" });
+  }
+});
+
+// GET /api/tasks/upcoming
+tasksRouter.get("/upcoming", validateAccessToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const daysParam = req.query.days as string;
+    const days = daysParam ? parseInt(daysParam) : 7;
+    
+    if (isNaN(days) || days < 1 || days > 365) {
+      return res.status(400).json({ message: "Days parameter must be between 1 and 365" });
+    }
+
+    const upcomingTasks = await getUpcomingTasks(userId, days);
+    res.status(200).json(upcomingTasks);
+  } catch (error) {
+    console.error("Error fetching upcoming tasks:", error);
+    res.status(500).json({ message: "Error fetching upcoming tasks" });
   }
 }); 

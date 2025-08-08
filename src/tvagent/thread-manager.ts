@@ -391,6 +391,36 @@ export class ThreadManager {
          taskData.status = taskData.status || 'Open'; // Default status
          return await createTask(userId, taskData);
          
+       case 'create_multiple_tasks':
+         const tasks = args.tasks || [];
+         const results = [];
+         const successes = [];
+         const failures = [];
+
+         for (const taskInput of tasks) {
+           try {
+             const mappedTaskData = mapTaskData(taskInput);
+             mappedTaskData.status = mappedTaskData.status || 'Open';
+             const task = await createTask(userId, mappedTaskData);
+             successes.push(task);
+             results.push({ success: true, task, originalTitle: taskInput.title });
+           } catch (error) {
+             failures.push({ title: taskInput.title, error: error instanceof Error ? error.message : 'Unknown error' });
+             results.push({ success: false, error: error instanceof Error ? error.message : 'Unknown error', originalTitle: taskInput.title });
+           }
+         }
+
+         return {
+           results,
+           summary: {
+             total: tasks.length,
+             successful: successes.length,
+             failed: failures.length,
+             successfulTasks: successes,
+             failedTasks: failures
+           }
+         };
+         
        case 'update_task':
          const updateData = mapTaskData(args);
          return await updateTask(userId, args.task_id, updateData);
@@ -467,6 +497,7 @@ export class ThreadManager {
            'Social Outreach': { completed: 0, target: 2, completionRate: 0 },
            'Novelty Challenge': { completed: 0, target: 2, completionRate: 0 },
            'Savoring Reflection': { completed: 0, target: 7, completionRate: 0 },
+           'Exercise': { completed: 0, target: 7, completionRate: 0 },
          };
          
          weekPractices.forEach(practice => {
@@ -570,14 +601,14 @@ export class ThreadManager {
          
        case 'prioritize_tasks':
          // Get tasks by IDs and return them sorted by priority
-         const tasks = [];
+         const priorityTasks = [];
          for (const taskId of args.task_ids || []) {
            const { getTask } = await import('../db/task-operations');
            const task = await getTask(userId, taskId);
-           if (task) tasks.push(task);
+           if (task) priorityTasks.push(task);
          }
-         tasks.sort((a, b) => (b.priority || 1) - (a.priority || 1));
-         return { prioritized_tasks: tasks };
+         priorityTasks.sort((a, b) => (b.priority || 1) - (a.priority || 1));
+         return { prioritized_tasks: priorityTasks };
          
        case 'make_task_mit':
          return await updateTask(userId, args.task_id, { 

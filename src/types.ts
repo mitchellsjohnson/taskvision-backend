@@ -22,7 +22,8 @@ export type WellnessPractice =
   | 'Kindness'
   | 'Social Outreach'
   | 'Novelty Challenge'
-  | 'Savoring Reflection';
+  | 'Savoring Reflection'
+  | 'Exercise';
 
 export interface PracticeInstance {
   // DynamoDB Keys
@@ -66,6 +67,29 @@ export interface UserWellnessSettings {
   weeklyGoals: Record<WellnessPractice, number>;
   createdAt: string;
   updatedAt: string;
+}
+
+// Dashboard and Activity Types
+export interface ActivityEntry {
+  id: string;
+  type: 'completion' | 'priority_change' | 'creation' | 'status_change';
+  taskId: string;
+  taskTitle: string;
+  timestamp: string;
+  details: {
+    oldValue?: string;
+    newValue?: string;
+  };
+}
+
+export interface ProductivityMetrics {
+  completedTasks: number;
+  createdTasks: number;
+  completedMITs: number;
+  createdMITs: number;
+  taskScore: number;
+  mitScore: number;
+  finalScore: number;
 }
 
 export interface WellnessInteractionTracker {

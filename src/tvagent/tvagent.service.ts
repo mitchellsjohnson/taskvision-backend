@@ -590,6 +590,60 @@ When deleting tasks:
             }
           },
           {
+            name: "create_multiple_tasks",
+            description: "Create multiple tasks at once from a single user request. Use this when the user provides a list of tasks to create, like 'Create tasks: 1. Buy groceries 2. Call dentist 3. Review reports'. IMPORTANT: If any task is missing priority or due date information, use ask_for_clarification first to gather this information before creating the tasks. Only use this function when you have complete information for all tasks.",
+            parameters: {
+              type: "object",
+              properties: {
+                tasks: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: {
+                        type: "string",
+                        description: "The task title"
+                      },
+                      description: {
+                        type: "string",
+                        description: "Optional task description"
+                      },
+                      dueDate: {
+                        type: "string",
+                        description: "Due date in YYYY-MM-DD format"
+                      },
+                      status: {
+                        type: "string",
+                        enum: ["Open", "InProgress", "Completed", "Waiting", "Canceled"],
+                        description: "Task status (defaults to Open)"
+                      },
+                      isMIT: {
+                        type: "boolean",
+                        description: "Whether this is a Most Important Task"
+                      },
+                      priority: {
+                        type: "integer",
+                        minimum: 1,
+                        maximum: 5,
+                        description: "Task priority (1 = highest, 5 = lowest, defaults to 3)"
+                      },
+                      tags: {
+                        type: "array",
+                        items: {
+                          type: "string"
+                        },
+                        description: "Task tags - use reserved tags first: 5-min, Creative, Customer, Follow-up, Gratitude, Leader, Personal, Research, Team, Training, Work"
+                      }
+                    },
+                    required: ["title"]
+                  },
+                  description: "Array of tasks to create"
+                }
+              },
+              required: ["tasks"]
+            }
+          },
+          {
             name: "update_task",
             description: "Update an existing task. When updating, consider if tags should be adjusted based on new information or context.",
             parameters: {
@@ -889,6 +943,73 @@ When deleting tasks:
         } catch (error) {
           return {
             message: `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`
+          };
+        }
+
+      case 'create_multiple_tasks':
+        try {
+          const tasks = args.tasks || [];
+          const results = [];
+          const successes = [];
+          const failures = [];
+
+          for (const taskData of tasks) {
+            try {
+              const task = await createTask(userId, {
+                title: taskData.title,
+                description: taskData.description,
+                dueDate: taskData.dueDate,
+                status: taskData.status || 'Open',
+                isMIT: taskData.isMIT || false,
+                priority: taskData.priority || 3,
+                tags: taskData.tags || []
+              });
+              successes.push(task);
+              results.push({ success: true, task, originalTitle: taskData.title });
+            } catch (error) {
+              failures.push({ title: taskData.title, error: error instanceof Error ? error.message : 'Unknown error' });
+              results.push({ success: false, error: error instanceof Error ? error.message : 'Unknown error', originalTitle: taskData.title });
+            }
+          }
+
+          let message = '';
+          if (successes.length > 0) {
+            const taskTitles = successes.map(t => {
+              // Ensure we get the title as a string
+              const title = typeof t === 'object' && t !== null ? (t.title || 'Unknown') : String(t);
+              return `"${title}"`;
+            }).join(', ');
+            message += `✅ Successfully created ${successes.length} task${successes.length > 1 ? 's' : ''}: ${taskTitles}`;
+          }
+          if (failures.length > 0) {
+            if (successes.length > 0) message += '\n';
+            const failureTitles = failures.map(f => {
+              const title = typeof f === 'object' && f !== null ? (f.title || 'Unknown') : String(f);
+              const error = typeof f === 'object' && f !== null ? (f.error || 'Unknown error') : 'Unknown error';
+              return `"${title}" (${error})`;
+            }).join(', ');
+            message += `❌ Failed to create ${failures.length} task${failures.length > 1 ? 's' : ''}: ${failureTitles}`;
+          }
+          if (successes.length === 0 && failures.length === 0) {
+            message = 'No tasks provided to create.';
+          }
+
+          return {
+            message,
+            data: {
+              results,
+              summary: {
+                total: tasks.length,
+                successful: successes.length,
+                failed: failures.length,
+                successfulTasks: successes.map(t => ({ title: t?.title || 'Unknown', id: t?.TaskId || 'Unknown' })),
+                failedTasks: failures.map(f => ({ title: f?.title || 'Unknown', error: f?.error || 'Unknown error' }))
+              }
+            }
+          };
+        } catch (error) {
+          return {
+            message: `Failed to create multiple tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
           };
         }
 

@@ -28,6 +28,7 @@ const SCORE_WEIGHTS: Record<WellnessPractice, { frequency: 'daily' | 'weekly'; m
   'Social Outreach': { frequency: 'weekly', maxEvents: 2 },
   'Novelty Challenge': { frequency: 'weekly', maxEvents: 2 },
   'Savoring Reflection': { frequency: 'daily', maxEvents: 7 },
+  'Exercise': { frequency: 'daily', maxEvents: 7 },
 };
 
 /**
@@ -68,6 +69,7 @@ function calculateWeeklyScore(practices: PracticeInstance[], weekStart: string):
     'Social Outreach': 0,
     'Novelty Challenge': 0,
     'Savoring Reflection': 0,
+    'Exercise': 0,
   };
 
   practices.forEach(practice => {
@@ -76,8 +78,8 @@ function calculateWeeklyScore(practices: PracticeInstance[], weekStart: string):
     }
   });
 
-  // Calculate normalized scores (each practice worth ~16.7 points)
-  const pointsPerPractice = 100 / 6;
+  // Calculate normalized scores (each practice worth ~14.3 points)
+  const pointsPerPractice = 100 / 7;
   let totalScore = 0;
 
   Object.keys(SCORE_WEIGHTS).forEach(practiceKey => {
@@ -107,6 +109,7 @@ function calculatePracticeBreakdown(practices: PracticeInstance[]): Record<Welln
     'Social Outreach': { completed: 0, target: 2 },
     'Novelty Challenge': { completed: 0, target: 2 },
     'Savoring Reflection': { completed: 0, target: 7 },
+    'Exercise': { completed: 0, target: 7 },
   };
 
   practices.forEach(practice => {
@@ -129,6 +132,7 @@ function calculateSimpleBreakdown(practices: PracticeInstance[]): Record<Wellnes
     'Social Outreach': 0,
     'Novelty Challenge': 0,
     'Savoring Reflection': 0,
+    'Exercise': 0,
   };
 
   practices.forEach(practice => {
@@ -411,7 +415,7 @@ export const getUserWellnessSettings = async (userId: string): Promise<UserWelln
       // Return default settings
       const defaultSettings: UserWellnessSettings = {
         userId,
-        enabledPractices: ['Gratitude', 'Meditation', 'Kindness', 'Social Outreach', 'Novelty Challenge', 'Savoring Reflection'],
+        enabledPractices: ['Gratitude', 'Meditation', 'Kindness', 'Social Outreach', 'Novelty Challenge', 'Savoring Reflection', 'Exercise'],
         weeklyGoals: {
           'Gratitude': 7,
           'Meditation': 7,
@@ -419,6 +423,7 @@ export const getUserWellnessSettings = async (userId: string): Promise<UserWelln
           'Social Outreach': 2,
           'Novelty Challenge': 2,
           'Savoring Reflection': 7,
+          'Exercise': 7,
         },
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -590,7 +595,8 @@ export const getRecentWellnessTasks = async (userId: string, practice: WellnessP
     'Kindness': ['Help a colleague with their work', 'Volunteer at local charity', 'Random act of kindness'],
     'Social Outreach': ['Call a friend I haven\'t spoken to', 'Join a community event', 'Reach out to family'],
     'Novelty Challenge': ['Try a new recipe', 'Learn something new online', 'Explore a new place'],
-    'Savoring Reflection': ['Reflect on today\'s positive moments', 'Write about a happy memory', 'Practice mindful appreciation']
+    'Savoring Reflection': ['Reflect on today\'s positive moments', 'Write about a happy memory', 'Practice mindful appreciation'],
+    'Exercise': ['30-minute walk or run', 'Gym workout session', 'Yoga or stretching', 'Dance or movement activity']
   };
   
   return sampleTasks[practice] || [];

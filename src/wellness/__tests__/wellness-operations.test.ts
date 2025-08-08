@@ -427,7 +427,7 @@ describe("Wellness Operations", () => {
       const result = await getUserWellnessSettings('test-user-id');
 
       expect(result.userId).toBe('test-user-id');
-      expect(result.enabledPractices).toEqual(['Gratitude', 'Meditation', 'Kindness', 'Social Outreach', 'Novelty Challenge', 'Savoring Reflection']);
+      expect(result.enabledPractices).toEqual(['Gratitude', 'Meditation', 'Kindness', 'Social Outreach', 'Novelty Challenge', 'Savoring Reflection', 'Exercise']);
       expect(result.createdAt).toBeDefined();
     });
   });
@@ -459,7 +459,8 @@ describe("Wellness Operations", () => {
           'Kindness': 2,
           'Social Outreach': 2,
           'Novelty Challenge': 2,
-          'Savoring Reflection': 7
+          'Savoring Reflection': 7,
+          'Exercise': 7
         },
       });
 
