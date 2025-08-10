@@ -263,6 +263,16 @@ export const updatePracticeInstance = async (
     }
   }
 
+  if (updateData.journal !== undefined) {
+    if (updateData.journal && updateData.journal.trim()) {
+      updateExpressions.push('journal = :journal');
+      expressionAttributeValues[':journal'] = updateData.journal.trim();
+    } else {
+      updateExpressions.push('journal = :null');
+      expressionAttributeValues[':null'] = null;
+    }
+  }
+
   const command = new UpdateCommand({
     TableName: TABLE_NAME,
     Key: {

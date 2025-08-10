@@ -38,6 +38,7 @@ export interface PracticeInstance {
   practice: WellnessPractice;
   completed: boolean;
   linkedTaskId?: string;
+  journal?: string; // Optional journal entry
   
   // Timestamps
   createdAt: string;
@@ -115,4 +116,5 @@ export interface CreatePracticeInstanceInput {
 export interface UpdatePracticeInstanceInput {
   completed?: boolean;
   linkedTaskId?: string;
+  journal?: string;
 } 
