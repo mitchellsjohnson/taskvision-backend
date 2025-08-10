@@ -133,7 +133,7 @@ router.put('/practices/:date/:practice', validateAccessToken, async (req, res) =
   try {
     const userId = getUserId(req);
     const { date, practice } = req.params;
-    const { completed, linkedTaskId } = req.body;
+    const { completed, linkedTaskId, journal } = req.body;
 
     // Validate practice type
     const validPractices: WellnessPractice[] = [
@@ -154,10 +154,10 @@ router.put('/practices/:date/:practice', validateAccessToken, async (req, res) =
     }
 
     // Validate that at least one field is being updated
-    if (completed === undefined && linkedTaskId === undefined) {
+    if (completed === undefined && linkedTaskId === undefined && journal === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'At least one field (completed, linkedTaskId) must be provided',
+        message: 'At least one field (completed, linkedTaskId, journal) must be provided',
       });
     }
 
@@ -165,7 +165,7 @@ router.put('/practices/:date/:practice', validateAccessToken, async (req, res) =
       userId,
       date,
       practice as WellnessPractice,
-      { completed, linkedTaskId }
+      { completed, linkedTaskId, journal }
     );
 
     res.json({

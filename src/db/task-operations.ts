@@ -319,7 +319,8 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
   }
 
   // After the main update, if isMIT was changed, trigger reprioritization
-  if (updateData.isMIT !== undefined) {
+  // BUT only if priority wasn't also explicitly set (which indicates manual reordering)
+  if (updateData.isMIT !== undefined && updateData.priority === undefined) {
     // Use a lock to prevent concurrent reprioritization for the same user
     if (!userReprioritizationLocks.has(userId)) {
       const reprioritizePromise = reprioritizeTasks(userId).finally(() => {
@@ -401,11 +402,6 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
         newValues: Object.keys(newValues).length > 0 ? newValues : undefined,
         timestamp: modifiedDate
       });
-    }
-
-    // After the main update, if isMIT was changed, trigger reprioritization
-    if (updateData.isMIT !== undefined) {
-      await reprioritizeTasks(userId);
     }
 
     return updatedTask;

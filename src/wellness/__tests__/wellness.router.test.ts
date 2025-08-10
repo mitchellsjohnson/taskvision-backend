@@ -211,7 +211,7 @@ describe('Wellness Router', () => {
         'test-user-id',
         '2024-01-01',
         'Gratitude',
-        { completed: true, linkedTaskId: undefined }
+        { completed: true, linkedTaskId: undefined, journal: undefined }
       );
     });
 
@@ -230,6 +230,30 @@ describe('Wellness Router', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.linkedTaskId).toBe('new-task-456');
+    });
+
+    it('should update journal entry', async () => {
+      const updatedPractice = {
+        id: 'practice-1',
+        practice: 'Gratitude',
+        journal: 'Grateful for sunny weather today',
+      };
+
+      mockedWellnessOperations.updatePracticeInstance.mockResolvedValue(updatedPractice as any);
+
+      const response = await request(app)
+        .put('/api/wellness/practices/2024-01-01/Gratitude')
+        .send({ journal: 'Grateful for sunny weather today' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual(updatedPractice);
+      expect(mockedWellnessOperations.updatePracticeInstance).toHaveBeenCalledWith(
+        'test-user-id',
+        '2024-01-01',
+        'Gratitude',
+        { completed: undefined, linkedTaskId: undefined, journal: 'Grateful for sunny weather today' }
+      );
     });
 
     it('should return 400 for invalid practice type', async () => {
