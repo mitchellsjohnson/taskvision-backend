@@ -1,127 +1,253 @@
 # TaskVision Backend - Cursor AI Rules
 
 ## Project Overview
-TaskVision is a full-stack task management application. This is the backend API built with Express.js, TypeScript, and DynamoDB.
+TaskVision backend is a TypeScript Express.js API serving the React frontend. It handles authentication, task management, wellness tracking, and AI agent features.
 
 ## Architecture & Tech Stack
 - **Framework**: Express.js with TypeScript
-- **Database**: DynamoDB (AWS SDK v2 for local development, v3 for production)
-- **Authentication**: Auth0 JWT middleware
-- **Deployment**: AWS Lambda via SAM (Serverless Application Model)
-- **Local Development**: DynamoDB Local via Docker
-- **Testing**: Jest
+- **Database**: DynamoDB (Local via Docker for development)
+- **Authentication**: Auth0 JWT middleware (`express-oauth2-jwt-bearer`)
+- **Deployment**: AWS Lambda via SAM
+- **Testing**: Jest with Supertest
+- **Build Tool**: TypeScript compiler
+- **ORM**: AWS SDK DynamoDB client (single-table design)
 
 ## Development Environment Setup
-- **Primary Script**: `./dev-server.sh` - Manages full-stack development environment
-- **Usage**: 
-  - `./dev-server.sh start` - Start all services (DynamoDB + Backend + Frontend)
-  - `./dev-server.sh restart` - Restart everything
-  - `./dev-server.sh status` - Check status
-  - `./dev-server.sh logs backend` - View backend logs
-
-### Local Environment Variables
-```
-IS_OFFLINE=true
-TABLE_NAME=TaskVision
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=fakeKey
-AWS_SECRET_ACCESS_KEY=fakeSecret
-```
-
-### Ports & Services
-- **Backend API**: http://localhost:6060
+- **Backend Port**: http://localhost:6060
+- **Frontend**: http://localhost:4040
 - **DynamoDB Local**: http://localhost:8000
-- **Frontend**: http://localhost:4040 (managed by this script)
+- **Full Development Environment**: Use `cd .. && ./dev-start.sh` from project root
+- **Backend Only**: Not recommended - always start complete environment
 
-## Database Schema (DynamoDB Single Table Design)
-- **Table Name**: TaskVision
-- **Primary Key**: PK (String), SK (String)
-- **GSI1**: GSI1PK (String), GSI1SK (String)
-- **Patterns**:
-  - Users: `PK: USER#${userId}`, `SK: PROFILE`
-  - Tasks: `PK: USER#${userId}`, `SK: TASK#${taskId}`
-  - Messages: `PK: USER#${userId}`, `SK: MESSAGE#${messageId}`
+### Development Scripts (Located in Parent Directory)
+- **Start All Services**: `cd .. && ./dev-start.sh`
+- **Stop All Services**: `cd .. && ./dev-stop.sh`
+- **Never start backend alone** - always use unified development scripts
+
+### Environment Files - IMPORTANT CONVENTION
+- **Local Development**: `.env.local` (ALWAYS use this for local development - never .env.development)
+- **Development Deploy**: `.env.dev` (for AWS dev environment)
+- **Production Deploy**: `.env.prod` (for AWS production)
+- **NOTE**: The project uses `.env.local` for both frontend and backend local development
 
 ## Code Standards & Patterns
 
-### TypeScript
-- Strict mode enabled
-- Always use explicit types for function parameters and returns
-- Prefer interfaces over types for object shapes
-- Use enums for constants with multiple values
+### TypeScript & Node.js
+- **Strict TypeScript** - Always use explicit typing
+- **Async/await** - No callback patterns or raw Promises
+- **Error handling** - Use try/catch blocks and proper error middleware
+- **Interface definitions** - Define interfaces for all data structures
+- **Functional programming** - Prefer pure functions where possible
 
 ### Express.js Patterns
-- Route handlers in separate files (`*.router.ts`)
-- Business logic in services (`*.service.ts`)
-- Database operations in operations files (`*-operations.ts`)
-- Middleware in `/middleware` directory
-- Validation using custom validation utilities
-
-### Error Handling
-- Use custom error middleware (`error.middleware.ts`)
-- Always include proper HTTP status codes
-- Return consistent error response format:
 ```typescript
-{
-  message: string;
-  error?: string;
-  details?: any;
-}
+// Route handler pattern
+export const routerHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Input validation
+    // Business logic
+    // Response formatting
+    res.json({ success: true, data: result });
+  } catch (error) {
+    // Error handling via middleware
+    throw error;
+  }
+};
 ```
 
-### Auth0 Integration
-- JWT validation via `auth0.middleware.ts`
-- User ID extraction via `get-user-id.ts`
-- Role-based access control via `role-validation.ts`
+### DynamoDB Single-Table Design
+- **Table Name**: TaskVision
+- **Primary Key**: PK (String), SK (String)
+- **GSI1**: GSI1PK (String), GSI1SK (String)
 
-### DynamoDB Operations
-- All database operations in `/db` directory
-- Use parameterized queries for security
-- Implement proper error handling for AWS operations
-- Use batch operations when possible for performance
+#### Access Patterns
+```typescript
+// Users
+PK: "USER#${userId}", SK: "PROFILE"
+
+// Tasks  
+PK: "USER#${userId}", SK: "TASK#${taskId}"
+
+// Wellness Practices
+PK: "USER#${userId}", SK: "PRACTICE#${date}#${practice}"
+
+// Weekly Scores
+PK: "USER#${userId}", SK: "SCORE#${weekStart}"
+```
+
+### Authentication & Authorization
+- **Auth0 JWT Middleware** - Validates tokens from frontend
+- **User ID extraction** - Extract user ID from JWT claims
+- **Route protection** - Use auth middleware on protected routes
+- **Error handling** - Proper 401/403 responses
+
+```typescript
+// Auth middleware usage
+router.get('/protected', auth0Middleware, protectedHandler);
+```
 
 ## File Organization
 ```
 src/
-├── index.ts                 # Main server entry point
-├── lambda.ts               # Lambda handler for deployment
-├── auth/                   # Auth0 configuration
-├── db/                     # Database operations
-├── middleware/             # Express middleware
-├── messages/               # Message-related routes & services
-├── tasks/                  # Task-related routes & services
-├── tvagent/               # AI agent features
-├── users/                 # User-related functionality
-├── wellness/              # Wellness tracking features
-├── types.ts               # Shared TypeScript types
-└── utils/                 # Utility functions
+├── index.ts                   # Express app setup
+├── lambda.ts                  # AWS Lambda handler
+├── local-server.ts            # Local development server
+├── loadEnv.ts                 # Environment configuration
+├── middleware/                # Express middleware
+│   ├── auth0.middleware.ts    # Auth0 JWT validation
+│   ├── error.middleware.ts    # Error handling
+│   └── not-found.middleware.ts # 404 handler
+├── tasks/                     # Task management
+│   ├── tasks.router.ts        # Task routes
+│   ├── tasks.service.ts       # Task business logic
+│   └── tasks.model.ts         # Task data models
+├── wellness/                  # Wellness tracking
+├── tvagent/                   # AI agent features
+├── users/                     # User management
+├── db/                        # Database operations
+├── types.ts                   # Shared TypeScript types
+├── utils/                     # Utility functions
+└── __tests__/                 # Test files
 ```
 
-## Testing
-- Test files: `*.test.ts` or in `__tests__/` directories
-- Use Jest with TypeScript
-- Mock external dependencies (AWS, Auth0)
-- Test database operations with local DynamoDB
+## API Design Patterns
 
-## Deployment
-- **Local**: `npm start` (with dev-server.sh for full stack)
-- **Build**: `npm run build`
-- **AWS Deploy**: `npm run sam:deploy`
+### RESTful Routes
+```typescript
+// Standard CRUD operations
+GET    /api/tasks              # List tasks
+POST   /api/tasks              # Create task
+GET    /api/tasks/:id          # Get task
+PUT    /api/tasks/:id          # Update task
+DELETE /api/tasks/:id          # Delete task
+```
 
-## Common Tasks
-1. **Add new route**: Create router + service + operations files
-2. **Database schema changes**: Update table creation scripts
-3. **New middleware**: Add to `/middleware` and register in routes
-4. **Environment changes**: Update template.yaml and local env vars
+### Response Format
+```typescript
+// Success response
+{
+  success: true,
+  data: T,
+  meta?: MetaInfo
+}
+
+// Error response
+{
+  success: false,
+  error: {
+    message: string,
+    code?: string,
+    details?: any
+  }
+}
+```
+
+### Request Validation
+- **Input validation** at route level
+- **TypeScript interfaces** for request bodies
+- **Error responses** for invalid input
+- **Sanitization** of user input
+
+## Database Operations
+
+### DynamoDB Service Pattern
+```typescript
+export class TaskService {
+  async getTask(userId: string, taskId: string): Promise<Task> {
+    const params = {
+      TableName: 'TaskVision',
+      Key: {
+        PK: `USER#${userId}`,
+        SK: `TASK#${taskId}`
+      }
+    };
+    // DynamoDB operation
+  }
+}
+```
+
+### Transaction Patterns
+- **Batch operations** for multiple items
+- **Conditional writes** for data consistency
+- **Error handling** for DynamoDB-specific errors
+
+## Testing Standards
+- **Test files**: `*.test.ts` in `__tests__/` directories
+- **Jest** with TypeScript support
+- **Supertest** for HTTP endpoint testing
+- **Mock DynamoDB** for unit tests
+- **Integration tests** with test database
+
+### Test Patterns
+```typescript
+describe('API Endpoint', () => {
+  beforeEach(async () => {
+    // Setup test data
+  });
+
+  it('should handle valid request', async () => {
+    const response = await request(app)
+      .get('/api/endpoint')
+      .expect(200);
+    
+    expect(response.body.success).toBe(true);
+  });
+});
+```
+
+## Error Handling
+- **Custom error classes** for different error types
+- **Error middleware** for consistent error responses
+- **Logging** for debugging and monitoring
+- **Graceful degradation** for external service failures
+
+## Environment & Deployment
+
+### Local Development
+- **DynamoDB Local** via Docker
+- **Environment variables** via `.env.local` (NEVER use .env.development)
+- **Hot reload** with ts-node-dev
+- **Unified startup** with parent directory scripts
+
+### AWS Lambda Deployment
+- **SAM framework** for Infrastructure as Code
+- **Environment-specific** configurations
+- **CI/CD** via GitHub Actions
+- **CloudWatch** logging
+
+## Security Patterns
+- **JWT validation** via Auth0 middleware
+- **CORS configuration** for frontend origin
+- **Input sanitization** and validation
+- **Error message** security (no sensitive data exposure)
 
 ## AI Assistant Instructions
-- Always use TypeScript with explicit typing
-- Follow existing patterns for routes, services, and database operations
-- Use the dev-server.sh script for development environment management
-- Reference existing middleware and error handling patterns
-- When adding database operations, use the established single-table design
-- For Auth0 integration, use existing middleware patterns
-- Always include proper error handling and validation 
+- Always use TypeScript with explicit types
+- Follow the single-table DynamoDB design patterns
+- Use Auth0 middleware for protected routes
+- Implement proper error handling and logging
+- Reference existing service patterns for consistency
+- Use the unified development scripts (never start backend alone)
+- Follow RESTful API design principles
+- Include proper input validation and sanitization
+- Test all endpoints with Jest and Supertest
+- For dependency updates, use Seaworthy tools to check latest versions
 
-## MCP tool usage
-When adding dependencies to the system, make sure to leverage seaworthy tools to determine the best versions to use 
+## Development Workflow
+1. **Start environment**: `cd .. && ./dev-start.sh`
+2. **Make changes**: Edit TypeScript files
+3. **Test locally**: Backend auto-restarts on changes
+4. **Run tests**: `npm test`
+5. **Deploy**: Use SAM commands or push to GitHub for CI/CD
+6. **Stop environment**: `cd .. && ./dev-stop.sh`
+
+## Important Notes
+- **Never start backend independently** - always use parent directory scripts
+- **DynamoDB Local required** - Backend depends on database being available
+- **Frontend integration** - Backend serves the React frontend API
+- **Environment variables** - Required: PORT, CLIENT_ORIGIN_URL for local development
+- **Environment file convention**: ALWAYS use `.env.local` for local development (not .env.development)
+- **CRITICAL: Environment Variable Authority** - NEVER add environment variables to scripts, code, or .env files without explicit user permission and discussion
+- **Port Configuration**: Scripts should use hardcoded ports for DynamoDB Local, frontend, and backend - do not add PORT to environment variables
+
+
