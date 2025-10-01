@@ -316,6 +316,7 @@ describe("Wellness Operations", () => {
         ...Array(7).fill(null).map(() => ({ practice: 'Gratitude', completed: true })),
         ...Array(7).fill(null).map(() => ({ practice: 'Meditation', completed: true })),
         ...Array(7).fill(null).map(() => ({ practice: 'Savoring Reflection', completed: true })),
+        ...Array(7).fill(null).map(() => ({ practice: 'Exercise', completed: true })),
         // All weekly practices completed
         ...Array(2).fill(null).map(() => ({ practice: 'Kindness', completed: true })),
         ...Array(2).fill(null).map(() => ({ practice: 'Social Outreach', completed: true })),

@@ -10,6 +10,7 @@ import { tasksRouter } from "./tasks/tasks.router";
 import { tvagentRouter } from "./tvagent/tvagent.router";
 import tvagentV2Router from "./tvagent/tvagent-v2.router";
 import wellnessRouter from "./wellness/wellness.router";
+import { userSettingsRouter } from "./users/user-settings.router";
 import { errorHandler } from "./middleware/error.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 
@@ -149,6 +150,7 @@ apiRouter.use("/tasks", tasksRouter);
 apiRouter.use("/tvagent", tvagentRouter);
 apiRouter.use("/tvagent/v2", tvagentV2Router);
 apiRouter.use("/wellness", wellnessRouter);
+apiRouter.use("/user", userSettingsRouter);
 
 // Error handling
 app.use(errorHandler);

@@ -12,7 +12,7 @@ const client = new DynamoDBClient({
 
 const createTable = async () => {
   const command = new CreateTableCommand({
-    TableName: "taskvision-local",
+    TableName: "taskvision",
     AttributeDefinitions: [
       { AttributeName: "PK", AttributeType: "S" },
       { AttributeName: "SK", AttributeType: "S" },
@@ -41,7 +41,7 @@ const createTable = async () => {
   try {
     const response = await client.send(command);
     console.log("Local table created successfully:", response);
-    console.log("Table name: taskvision-local");
+    console.log("Table name: taskvision");
     console.log("You can view it at: http://localhost:8001 (DynamoDB Admin)");
   } catch (error) {
     if (error instanceof ResourceInUseException) {

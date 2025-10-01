@@ -40,6 +40,7 @@ import { Task } from "../types";
 describe("Task Operations", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSend.mockReset();
   });
 
   describe("createTask", () => {
@@ -164,8 +165,11 @@ describe("Task Operations", () => {
       mockSend
         .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
         .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
+        .mockResolvedValueOnce({}) // logTaskAuditEvent call
         .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
-        .mockResolvedValue({}); // UpdateCommand for reprioritizeTasks
+        .mockResolvedValueOnce({}) // UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({}) // Additional UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({}); // Additional UpdateCommand for reprioritizeTasks (if any)
 
       await updateTask("test-user-id", "task-1", updateData);
 
@@ -200,8 +204,11 @@ describe("Task Operations", () => {
       mockSend
         .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
         .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
+        .mockResolvedValueOnce({}) // logTaskAuditEvent call
         .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
-        .mockResolvedValue({}); // UpdateCommand for reprioritizeTasks
+        .mockResolvedValueOnce({}) // UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({}) // Additional UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({}); // Additional UpdateCommand for reprioritizeTasks (if any)
 
       await updateTask("test-user-id", "task-1", updateData);
 
@@ -240,7 +247,8 @@ describe("Task Operations", () => {
 
       mockSend
         .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
-        .mockResolvedValueOnce({ Attributes: mockReturnedTask }); // UpdateCommand
+        .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
+        .mockResolvedValueOnce({}); // logTaskAuditEvent call
 
       const updatedTask = (await updateTask(
         "test-user-id",
@@ -280,7 +288,8 @@ describe("Task Operations", () => {
 
       mockSend
         .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
-        .mockResolvedValueOnce({ Attributes: mockReturnedTask }); // UpdateCommand
+        .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
+        .mockResolvedValueOnce({}); // logTaskAuditEvent call
 
       const updatedTask = (await updateTask(
         "test-user-id",

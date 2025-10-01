@@ -154,6 +154,7 @@ router.put('/practices/:date/:practice', validateAccessToken, async (req, res) =
     }
 
     // Validate that at least one field is being updated
+    // Note: empty string for journal is valid (it means clearing the journal)
     if (completed === undefined && linkedTaskId === undefined && journal === undefined) {
       return res.status(400).json({
         success: false,

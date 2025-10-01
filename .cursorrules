@@ -16,12 +16,16 @@ TaskVision backend is a TypeScript Express.js API serving the React frontend. It
 - **Backend Port**: http://localhost:6060
 - **Frontend**: http://localhost:4040
 - **DynamoDB Local**: http://localhost:8000
-- **Full Development Environment**: Use `cd .. && ./dev-start.sh` from project root
+- **Full Development Environment**: Use `cd .. && ./dev.sh start` from project root
 - **Backend Only**: Not recommended - always start complete environment
 
 ### Development Scripts (Located in Parent Directory)
-- **Start All Services**: `cd .. && ./dev-start.sh`
-- **Stop All Services**: `cd .. && ./dev-stop.sh`
+- **Start All Services**: `cd .. && ./dev.sh start`
+- **Stop All Services**: `cd .. && ./dev.sh stop`
+- **Restart All Services**: `cd .. && ./dev.sh restart`
+- **Check Status**: `cd .. && ./dev.sh status`
+- **View Logs**: `cd .. && ./dev.sh logs [backend|frontend]`
+- **Environment Check**: `cd .. && ./dev.sh doctor`
 - **Never start backend alone** - always use unified development scripts
 
 ### Environment Files - IMPORTANT CONVENTION
@@ -29,6 +33,8 @@ TaskVision backend is a TypeScript Express.js API serving the React frontend. It
 - **Development Deploy**: `.env.dev` (for AWS dev environment)
 - **Production Deploy**: `.env.prod` (for AWS production)
 - **NOTE**: The project uses `.env.local` for both frontend and backend local development
+
+
 
 ## Code Standards & Patterns
 
@@ -227,19 +233,21 @@ describe('API Endpoint', () => {
 - Use Auth0 middleware for protected routes
 - Implement proper error handling and logging
 - Reference existing service patterns for consistency
-- Use the unified development scripts (never start backend alone)
+- Use the unified development scripts via `./dev.sh` (never start backend alone)
 - Follow RESTful API design principles
 - Include proper input validation and sanitization
 - Test all endpoints with Jest and Supertest
 - For dependency updates, use Seaworthy tools to check latest versions
 
 ## Development Workflow
-1. **Start environment**: `cd .. && ./dev-start.sh`
+1. **Start environment**: `cd .. && ./dev.sh start`
 2. **Make changes**: Edit TypeScript files
 3. **Test locally**: Backend auto-restarts on changes
 4. **Run tests**: `npm test`
-5. **Deploy**: Use SAM commands or push to GitHub for CI/CD
-6. **Stop environment**: `cd .. && ./dev-stop.sh`
+5. **Check status**: `cd .. && ./dev.sh status`
+6. **View logs**: `cd .. && ./dev.sh logs backend`
+7. **Deploy**: Use SAM commands or push to GitHub for CI/CD
+8. **Stop environment**: `cd .. && ./dev.sh stop`
 
 ## Important Notes
 - **Never start backend independently** - always use parent directory scripts

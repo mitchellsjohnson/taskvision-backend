@@ -46,6 +46,10 @@ export class ThreadManager {
       throw new Error('OPENAI_ASSISTANT_ID environment variable is required');
     }
 
+    // Log API key for debugging (first 10 and last 4 characters)
+    const apiKey = process.env.OPENAI_API_KEY;
+    console.log(`🔑 ThreadManager using OpenAI API Key: ${apiKey.substring(0, 10)}...${apiKey.slice(-4)}`);
+
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
