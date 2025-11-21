@@ -44,7 +44,7 @@ tasksRouter.get("/", validateAccessToken, async (req: Request, res: Response) =>
 tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
-    const { title, description, dueDate, status, isMIT, priority, tags } = req.body;
+    const { title, description, dueDate, status, isMIT, priority, tags, insertPosition, shortCode } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
@@ -55,20 +55,22 @@ tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) =
     }
 
     const taskData: any = { title, description, dueDate, status };
-    
+
     // Add optional fields if provided
     if (isMIT !== undefined) taskData.isMIT = isMIT;
     if (priority !== undefined) taskData.priority = priority;
     if (tags !== undefined) taskData.tags = tags;
+    if (insertPosition !== undefined) taskData.insertPosition = insertPosition;
+    if (shortCode !== undefined) taskData.shortCode = shortCode;
 
     const newTask = await createTask(userId, taskData);
     res.status(201).json(newTask);
   } catch (error: any) {
     console.error(error);
     if (error.validationErrors) {
-      return res.status(400).json({ 
-        message: "Validation failed", 
-        errors: error.validationErrors 
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: error.validationErrors
       });
     }
     res.status(500).json({ message: "Error creating task" });
@@ -81,7 +83,7 @@ tasksRouter.put("/:taskId", validateAccessToken, async (req: Request, res: Respo
     const userId = getUserId(req);
     const { taskId } = req.params;
     const {
-      title, description, dueDate, status, isMIT, 
+      title, description, dueDate, status, isMIT,
       priority, tags, completedDate
     } = req.body;
 
@@ -110,9 +112,9 @@ tasksRouter.put("/:taskId", validateAccessToken, async (req: Request, res: Respo
   } catch (error: any) {
     console.error(error);
     if (error.validationErrors) {
-      return res.status(400).json({ 
-        message: "Validation failed", 
-        errors: error.validationErrors 
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: error.validationErrors
       });
     }
     res.status(500).json({ message: "Error updating task" });
@@ -143,7 +145,7 @@ tasksRouter.get("/metrics", validateAccessToken, async (req: Request, res: Respo
     const userId = getUserId(req);
     const daysParam = req.query.days as string;
     const days = daysParam ? parseInt(daysParam) : 7;
-    
+
     if (isNaN(days) || days < 1 || days > 365) {
       return res.status(400).json({ message: "Days parameter must be between 1 and 365" });
     }
@@ -162,7 +164,7 @@ tasksRouter.get("/activity", validateAccessToken, async (req: Request, res: Resp
     const userId = getUserId(req);
     const limitParam = req.query.limit as string;
     const limit = limitParam ? parseInt(limitParam) : 5;
-    
+
     if (isNaN(limit) || limit < 1 || limit > 50) {
       return res.status(400).json({ message: "Limit parameter must be between 1 and 50" });
     }
@@ -181,7 +183,7 @@ tasksRouter.get("/upcoming", validateAccessToken, async (req: Request, res: Resp
     const userId = getUserId(req);
     const daysParam = req.query.days as string;
     const days = daysParam ? parseInt(daysParam) : 7;
-    
+
     if (isNaN(days) || days < 1 || days > 365) {
       return res.status(400).json({ message: "Days parameter must be between 1 and 365" });
     }

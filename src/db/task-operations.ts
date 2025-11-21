@@ -28,6 +28,8 @@ interface TaskInput {
   isMIT?: boolean;
   priority?: number;
   tags?: string[];
+  insertPosition?: number; // Optional: specify exact position in combined MIT+LIT list
+  shortCode?: string; // Optional: SMS short code for task
 }
 
 export const createTask = async (userId: string, taskData: TaskInput) => {
@@ -41,8 +43,8 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
 
   const taskId = ulid();
   const now = new Date().toISOString();
-  
-  const task = {
+
+  const task: any = {
     PK: `USER#${userId}`,
     SK: `TASK#${taskId}`,
     GSI1PK: `USER#${userId}`,
@@ -62,6 +64,11 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     completedDate: taskData.status === "Completed" ? now : null,
   };
 
+  // Add shortCode if provided (for SMS-created tasks)
+  if (taskData.shortCode) {
+    task.shortCode = taskData.shortCode;
+  }
+
   const command = new PutCommand({
     TableName: TABLE_NAME,
     Item: task,
@@ -69,7 +76,7 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
 
   try {
     await docClient.send(command);
-    
+
     // Log audit event for task creation
     await logTaskAuditEvent(userId, {
       taskId,
@@ -83,11 +90,18 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
       },
       timestamp: now
     });
-    
+
     // Trigger reprioritization to handle the new task's position
-    await reprioritizeTasks(userId, taskId, (taskData.priority || 1) - 1);
-    
-    return task;
+    // If insertPosition is provided, use that; otherwise use priority-based calculation
+    const repositionIndex = taskData.insertPosition !== undefined
+      ? taskData.insertPosition
+      : (taskData.priority || 1) - 1;
+
+    await reprioritizeTasks(userId, taskId, repositionIndex);
+
+    // Fetch the task again to get the updated priority after reprioritization
+    const updatedTask = await getTask(userId, taskId);
+    return updatedTask || task; // Fallback to original task if fetch fails
   } catch (error) {
     console.error("Error creating task:", error);
     throw new Error("Could not create task.");
@@ -121,9 +135,9 @@ export const getTasksForUser = async (
   };
 
   const filterExpressions: string[] = [];
-  
+
   // This is the corrected line
-  let projectionExpression = "TaskId, #title, #description, dueDate, #st, isMIT, priority, creationDate, modifiedDate, completedDate, tags";
+  let projectionExpression = "TaskId, #title, #description, dueDate, #st, isMIT, priority, creationDate, modifiedDate, completedDate, tags, shortCode";
 
   if (filters.status && filters.status.length > 0) {
     const statusPlaceholders = filters.status.map((s, i) => `:status${i}`);
@@ -207,6 +221,7 @@ export const getTask = async (userId: string, taskId: string) => {
       PK: `USER#${userId}`,
       SK: `TASK#${taskId}`,
     },
+    ConsistentRead: true, // Ensure we get the latest data after reprioritization
   };
   try {
     const result = await docClient.send(new GetCommand(params));
@@ -218,63 +233,88 @@ export const getTask = async (userId: string, taskId: string) => {
 }
 
 export const reprioritizeTasks = async (userId: string, movedTaskId?: string, newPosition?: number) => {
-    // Use a strongly consistent read to ensure we get the latest data
-    const allTasksResult = await docClient.send(new QueryCommand({
+  console.log('[reprioritizeTasks] Called with:', { userId, movedTaskId, newPosition });
+
+  // Use a strongly consistent read to ensure we get the latest data
+  const allTasksResult = await docClient.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
+    ConsistentRead: true,
+  }));
+
+  let allTasks = allTasksResult.Items || [];
+  console.log('[reprioritizeTasks] Found tasks:', allTasks.length);
+
+  // Filter out completed and canceled tasks, as they don't have a priority
+  let activeTasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Canceled');
+  console.log('[reprioritizeTasks] Active tasks:', activeTasks.length);
+
+  // Sort tasks by isMIT (MIT first) and then by priority to establish consistent order
+  // This ensures that position calculations work correctly
+  activeTasks.sort((a, b) => {
+    if (a.isMIT && !b.isMIT) return -1;  // MIT before LIT
+    if (!a.isMIT && b.isMIT) return 1;   // LIT after MIT
+    return (a.priority || 0) - (b.priority || 0);  // Sort by priority within each group
+  });
+
+  const movedTask = movedTaskId ? activeTasks.find(t => t.TaskId === movedTaskId) : undefined;
+  console.log('[reprioritizeTasks] Moved task found:', !!movedTask);
+
+  if (movedTask && newPosition !== undefined) {
+    console.log('[reprioritizeTasks] Moving task to position:', newPosition);
+    // Remove the moved task from its current spot
+    activeTasks = activeTasks.filter(t => t.TaskId !== movedTaskId);
+    // Insert it at the new position
+    activeTasks.splice(newPosition, 0, movedTask);
+  }
+
+  // Separate into MIT and LIT lists based on their current state
+  // Do NOT sort here - tasks are already in correct order from splice operation
+  const mitTasks = activeTasks.filter(t => t.isMIT);
+  const litTasks = activeTasks.filter(t => !t.isMIT);
+
+  console.log('[reprioritizeTasks] MIT tasks:', mitTasks.length, 'LIT tasks:', litTasks.length);
+  console.log('[reprioritizeTasks] MIT task priorities before:', mitTasks.map(t => ({ id: t.TaskId.substring(0, 8), priority: t.priority, priorityType: typeof t.priority, title: t.title })));
+
+  // Update MIT priorities (1-based: 1, 2, 3)
+  const mitPromises = mitTasks.map((task, index) => {
+    const newPriority = index + 1; // 1-based priority within MIT
+    const currentPriority = Number(task.priority); // Ensure it's a number
+    console.log(`[reprioritizeTasks] MIT task ${task.TaskId.substring(0, 8)}: ${currentPriority} (${typeof task.priority}) -> ${newPriority} | needsUpdate: ${currentPriority !== newPriority}`);
+    if (currentPriority !== newPriority) {
+      console.log(`[reprioritizeTasks] UPDATING MIT task ${task.TaskId.substring(0, 8)} priority from ${currentPriority} to ${newPriority}`);
+      return docClient.send(new UpdateCommand({
         TableName: TABLE_NAME,
-        KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
-        ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
-        ConsistentRead: true,
-    }));
-    
-    let allTasks = allTasksResult.Items || [];
-
-    // Filter out completed and canceled tasks, as they don't have a priority
-    let activeTasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Canceled');
-
-    const movedTask = movedTaskId ? activeTasks.find(t => t.TaskId === movedTaskId) : undefined;
-    
-    if (movedTask && newPosition !== undefined) {
-        // Remove the moved task from its current spot
-        activeTasks = activeTasks.filter(t => t.TaskId !== movedTaskId);
-        // Insert it at the new position
-        activeTasks.splice(newPosition, 0, movedTask);
+        Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+        UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+        ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+        ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+      }));
     }
-    
-    // Separate into MIT and LIT lists based on their current state
-    const mitTasks = activeTasks.filter(t => t.isMIT).sort((a, b) => a.priority - b.priority);
-    const litTasks = activeTasks.filter(t => !t.isMIT).sort((a, b) => a.priority - b.priority);
+    return Promise.resolve();
+  });
 
-    // Update MIT priorities (1-based: 1, 2, 3)
-    const mitPromises = mitTasks.map((task, index) => {
-        const newPriority = index + 1; // 1-based priority within MIT
-        if (task.priority !== newPriority) {
-            return docClient.send(new UpdateCommand({
-                TableName: TABLE_NAME,
-                Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
-                UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
-                ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
-                ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
-            }));
-        }
-        return Promise.resolve();
-    });
+  // Update LIT priorities (1-based: 1, 2, 3, 4...)
+  const litPromises = litTasks.map((task, index) => {
+    const newPriority = index + 1; // 1-based priority within LIT
+    const currentPriority = Number(task.priority); // Ensure it's a number
+    console.log(`[reprioritizeTasks] LIT task ${task.TaskId.substring(0, 8)}: ${currentPriority} (${typeof task.priority}) -> ${newPriority} | needsUpdate: ${currentPriority !== newPriority}`);
+    if (currentPriority !== newPriority) {
+      console.log(`[reprioritizeTasks] UPDATING LIT task ${task.TaskId.substring(0, 8)} priority from ${currentPriority} to ${newPriority}`);
+      return docClient.send(new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+        UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+        ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+        ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+      }));
+    }
+    return Promise.resolve();
+  });
 
-    // Update LIT priorities (1-based: 1, 2, 3, 4...)
-    const litPromises = litTasks.map((task, index) => {
-        const newPriority = index + 1; // 1-based priority within LIT
-        if (task.priority !== newPriority) {
-            return docClient.send(new UpdateCommand({
-                TableName: TABLE_NAME,
-                Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
-                UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
-                ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
-                ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
-            }));
-        }
-        return Promise.resolve();
-    });
-
-    await Promise.all([...mitPromises, ...litPromises]);
+  await Promise.all([...mitPromises, ...litPromises]);
+  console.log('[reprioritizeTasks] Completed. Updated', mitPromises.length + litPromises.length, 'tasks');
 };
 
 export async function updateTask(userId: string, taskId: string, updateData: Partial<Task & { position?: number }>): Promise<Task | null> {
@@ -296,7 +336,7 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
   if (updateData.position !== undefined) {
     await reprioritizeTasks(userId, taskId, updateData.position);
     // After reprioritizing, we remove 'position' so it's not added to the DB.
-    delete updateData.position; 
+    delete updateData.position;
   }
 
   // If after handling position, there are no other fields to update, we can return early.
@@ -314,7 +354,7 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
     if (updateData.status === 'Completed') {
       updateData.completedDate = modifiedDate;
     } else if (updateData.status === 'Canceled') {
-      updateData.completedDate = null; 
+      updateData.completedDate = null;
     }
   }
 
@@ -358,7 +398,7 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
   try {
     // Get the current task state for audit logging
     const currentTask = await getTask(userId, taskId);
-    
+
     const command = new UpdateCommand(params);
     const result: UpdateCommandOutput = await docClient.send(command);
     const updatedTask = result.Attributes as Task | null;
@@ -367,18 +407,18 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
     if (currentTask && updatedTask) {
       const oldValues: Record<string, any> = {};
       const newValues: Record<string, any> = {};
-      
+
       // Track significant changes
       if (currentTask.status !== updatedTask.status) {
         oldValues.status = currentTask.status;
         newValues.status = updatedTask.status;
       }
-      
+
       if (currentTask.isMIT !== updatedTask.isMIT) {
         oldValues.isMIT = currentTask.isMIT;
         newValues.isMIT = updatedTask.isMIT;
       }
-      
+
       if (currentTask.priority !== updatedTask.priority) {
         oldValues.priority = currentTask.priority;
         newValues.priority = updatedTask.priority;
@@ -415,7 +455,7 @@ export const deleteTask = async (userId: string, taskId: string) => {
   try {
     // Get the task before deletion for audit logging
     const taskToDelete = await getTask(userId, taskId);
-    
+
     const command = new DeleteCommand({
       TableName: TABLE_NAME,
       Key: {
@@ -425,7 +465,7 @@ export const deleteTask = async (userId: string, taskId: string) => {
     });
 
     await docClient.send(command);
-    
+
     // Log audit event for task deletion
     if (taskToDelete) {
       await logTaskAuditEvent(userId, {
@@ -440,7 +480,7 @@ export const deleteTask = async (userId: string, taskId: string) => {
         timestamp: new Date().toISOString()
       });
     }
-    
+
     return { success: true, message: "Task deleted successfully" };
   } catch (error) {
     console.error("Error deleting task:", error);
@@ -483,19 +523,19 @@ export const getProductivityMetrics = async (userId: string, days: number = 7): 
     const tasks = result.Items || [];
 
     // Filter tasks created in the specified time period (excluding canceled)
-    const tasksInPeriod = tasks.filter(task => 
+    const tasksInPeriod = tasks.filter(task =>
       task.creationDate >= cutoffDate && task.status !== 'Canceled'
     );
 
     // Calculate metrics
-    const completedTasks = tasksInPeriod.filter(task => 
+    const completedTasks = tasksInPeriod.filter(task =>
       task.status === 'Completed' && task.completedDate >= cutoffDate
     ).length;
 
     const createdTasks = tasksInPeriod.length;
 
     const mitsInPeriod = tasksInPeriod.filter(task => task.isMIT);
-    const completedMITs = mitsInPeriod.filter(task => 
+    const completedMITs = mitsInPeriod.filter(task =>
       task.status === 'Completed' && task.completedDate >= cutoffDate
     ).length;
 
@@ -607,7 +647,7 @@ export const getUpcomingTasks = async (userId: string, days: number = 7): Promis
   const today = new Date();
   const futureDate = new Date();
   futureDate.setDate(today.getDate() + days);
-  
+
   const futureDateStr = futureDate.toISOString().split('T')[0];
 
   const params = {
@@ -635,31 +675,31 @@ export const getUpcomingTasks = async (userId: string, days: number = 7): Promis
   try {
     const result = await docClient.send(new QueryCommand(params));
     const tasks = (result.Items || []) as Task[];
-    
+
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Sort by urgency: overdue first, then due today, then future dates (earliest first)
     return tasks.sort((a, b) => {
       if (!a.dueDate || !b.dueDate) return 0;
-      
+
       const aIsOverdue = a.dueDate < today;
       const bIsOverdue = b.dueDate < today;
       const aIsDueToday = a.dueDate === today;
       const bIsDueToday = b.dueDate === today;
-      
+
       // Overdue tasks come first
       if (aIsOverdue && !bIsOverdue) return -1;
       if (bIsOverdue && !aIsOverdue) return 1;
-      
+
       // If both are overdue, sort by earliest due date first (most overdue)
       if (aIsOverdue && bIsOverdue) {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
-      
+
       // Due today tasks come before future tasks
       if (aIsDueToday && !bIsDueToday && !bIsOverdue) return -1;
       if (bIsDueToday && !aIsDueToday && !aIsOverdue) return 1;
-      
+
       // For all other cases, sort by due date (earliest first)
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });

@@ -13,6 +13,7 @@ export interface Task {
   priority: number;
   isMIT: boolean;
   tags: string[];
+  shortCode?: string;  // 4-character code for SMS operations (e.g., "a1b2")
 }
 
 // Wellness Module Types

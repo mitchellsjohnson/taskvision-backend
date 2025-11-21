@@ -21,9 +21,20 @@ Parameters:
   Auth0Audience:
     Type: String
     Description: The Auth0 audience
+  Auth0ClientId:
+    Type: String
+    Description: The Auth0 M2M Client ID for SMS Lambda
+    NoEcho: true
+    Default: ""
+  Auth0ClientSecret:
+    Type: String
+    Description: The Auth0 M2M Client Secret for SMS Lambda
+    NoEcho: true
+    Default: ""
   TableName:
     Type: String
-    Description: The name of the DynamoDB table
+    Description: The name of the EXISTING DynamoDB table (never created by this stack)
+    Default: TaskVision
   OpenAIApiKey:
     Type: String
     Description: The OpenAI API key for TVAgent functionality
@@ -32,6 +43,14 @@ Parameters:
     Type: String
     Description: The OpenAI Assistant ID for TVAgent functionality
     NoEcho: true
+  EumConfigurationSet:
+    Type: String
+    Description: The EUM configuration set name for SMS (optional)
+    Default: "default"
+  EumOriginationNumber:
+    Type: String
+    Description: The phone number for sending SMS via AWS End User Messaging (configure after deployment)
+    Default: ""
   Version:
     Type: String
     Description: Version of the deployment
@@ -74,7 +93,46 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Scan
                   - dynamodb:Query
-                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/index/*'
+
+  SmsProcessorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}/index/*'
+        - PolicyName: EumSmsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sms-voice:SendTextMessage
+                  - sms-voice:SendVoiceMessage
+                Resource: '*'
 
   TaskVisionFunction:
     Type: AWS::Serverless::Function
@@ -112,6 +170,57 @@ Resources:
         External:
           - aws-sdk
 
+  SmsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "taskvision-sms-topic-${Version}"
+      DisplayName: TaskVision SMS Ingestion Topic
+      Subscription:
+        - Endpoint: !GetAtt SmsProcessorFunction.Arn
+          Protocol: lambda
+
+  SmsTopicLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SmsProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref SmsTopic
+
+  SmsProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "taskvision-sms-processor-${Version}"
+      CodeUri: ./
+      Handler: sms.lambda.handler
+      Runtime: nodejs18.x
+      Timeout: 30
+      MemorySize: 256
+      Role: !GetAtt SmsProcessorFunctionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          AUTH0_DOMAIN: !Ref Auth0Domain
+          AUTH0_AUDIENCE: !Ref Auth0Audience
+          AUTH0_CLIENT_ID: !Ref Auth0ClientId
+          AUTH0_CLIENT_SECRET: !Ref Auth0ClientSecret
+          EUM_CONFIGURATION_SET: !Ref EumConfigurationSet
+          EUM_ORIGINATION_NUMBER: !Ref EumOriginationNumber
+          TASKVISION_API_URL: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+          VERSION: !Ref Version
+      Tags:
+        Version: !Ref Version
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/sms/sms.lambda.ts
+        Minify: true
+        Target: es2020
+        Sourcemap: true
+        External:
+          - aws-sdk
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint (default)
@@ -122,3 +231,12 @@ Outputs:
   FunctionRole:
     Description: Lambda function role ARN
     Value: !GetAtt TaskVisionFunctionRole.Arn
+  SmsTopicArn:
+    Description: SNS Topic ARN for SMS ingestion (configure this in Pinpoint)
+    Value: !Ref SmsTopic
+  SmsProcessorFunctionName:
+    Description: Name of SMS Processor Lambda function
+    Value: !Ref SmsProcessorFunction
+  SmsProcessorFunctionArn:
+    Description: ARN of SMS Processor Lambda function
+    Value: !GetAtt SmsProcessorFunction.Arn

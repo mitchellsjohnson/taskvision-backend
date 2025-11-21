@@ -11,6 +11,8 @@ import { tvagentRouter } from "./tvagent/tvagent.router";
 import tvagentV2Router from "./tvagent/tvagent-v2.router";
 import wellnessRouter from "./wellness/wellness.router";
 import { userSettingsRouter } from "./users/user-settings.router";
+import { smsSettingsRouter } from "./users/sms-settings.router";
+import { smsDebugRouter } from "./users/sms-debug.router";
 import { errorHandler } from "./middleware/error.middleware";
 import { notFoundHandler } from "./middleware/not-found.middleware";
 
@@ -38,68 +40,33 @@ const apiRouter = express.Router();
 app.use(express.json());
 app.set("json spaces", 2);
 
-// Production monitoring middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const startTime = Date.now();
-  const requestId = Math.random().toString(36).substring(7);
-  
-  console.log(`=== EXPRESS REQUEST START [${requestId}] ===`);
-  console.log('Request details:', {
-    requestId,
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    query: req.query,
-    origin: req.get('origin'),
-    referer: req.get('referer'),
-    userAgent: req.get('user-agent'),
-    host: req.get('host'),
-    contentType: req.get('content-type'),
-    authorization: req.get('authorization') ? '[PRESENT]' : '[MISSING]',
-    timestamp: new Date().toISOString()
+// Simple request logging (only in verbose mode)
+const VERBOSE_LOGGING = process.env.VERBOSE_LOGGING === 'true';
+
+if (VERBOSE_LOGGING) {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substring(7);
+
+    console.log(`[${requestId}] ${req.method} ${req.url}`);
+
+    // Override res.json to log responses
+    const originalJson = res.json;
+    res.json = function(body: any) {
+      const duration = Date.now() - startTime;
+      console.log(`[${requestId}] ${res.statusCode} ${duration}ms`);
+      return originalJson.call(this, body);
+    };
+
+    next();
   });
-  
-  // Log all headers for debugging
-  console.log('All request headers:', req.headers);
-  
-  // Override res.json to log responses
-  const originalJson = res.json;
-  res.json = function(body: any) {
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    
-    console.log(`Express response [${requestId}]:`, {
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      bodyPreview: typeof body === 'object' ? JSON.stringify(body).substring(0, 200) + '...' : body,
-      headers: res.getHeaders(),
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log(`=== EXPRESS REQUEST COMPLETE [${requestId}] ===`);
-    return originalJson.call(this, body);
-  };
-  
-  // Override res.send to log responses
-  const originalSend = res.send;
-  res.send = function(body: any) {
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    
-    console.log(`Express response [${requestId}]:`, {
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      bodyPreview: typeof body === 'string' ? body.substring(0, 200) + '...' : body,
-      headers: res.getHeaders(),
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log(`=== EXPRESS REQUEST COMPLETE [${requestId}] ===`);
-    return originalSend.call(this, body);
-  };
-  
-  next();
-});
+} else {
+  // Minimal logging - just method and path
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    console.log(`${req.method} ${req.path}`);
+    next();
+  });
+}
 
 // Security headers
 app.use(
@@ -151,6 +118,8 @@ apiRouter.use("/tvagent", tvagentRouter);
 apiRouter.use("/tvagent/v2", tvagentV2Router);
 apiRouter.use("/wellness", wellnessRouter);
 apiRouter.use("/user", userSettingsRouter);
+apiRouter.use("/user", smsSettingsRouter); // SMS settings endpoints
+apiRouter.use("/dev", smsDebugRouter); // SMS debug endpoints (development only)
 
 // Error handling
 app.use(errorHandler);
