@@ -93,9 +93,33 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
 
     // Trigger reprioritization to handle the new task's position
     // If insertPosition is provided, use that; otherwise use priority-based calculation
-    const repositionIndex = taskData.insertPosition !== undefined
-      ? taskData.insertPosition
-      : (taskData.priority || 1) - 1;
+    let repositionIndex: number;
+    if (taskData.insertPosition !== undefined) {
+      repositionIndex = taskData.insertPosition;
+    } else {
+      // For LIT tasks, we need to account for existing MIT tasks
+      // since reprioritizeTasks sorts MIT first, then LIT
+      if (!task.isMIT) {
+        // Query existing tasks to count MITs
+        const existingTasksResult = await docClient.send(new QueryCommand({
+          TableName: TABLE_NAME,
+          KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+          ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
+          ProjectionExpression: "isMIT, #st",
+          ExpressionAttributeNames: { "#st": "status" },
+          ConsistentRead: true,
+        }));
+
+        const existingTasks = existingTasksResult.Items || [];
+        const mitCount = existingTasks.filter(t => t.isMIT && t.status !== 'Completed' && t.status !== 'Canceled').length;
+
+        // Position = number of MITs + (LIT priority - 1)
+        repositionIndex = mitCount + (taskData.priority || 1) - 1;
+      } else {
+        // For MIT tasks, use priority directly (0-indexed)
+        repositionIndex = (taskData.priority || 1) - 1;
+      }
+    }
 
     await reprioritizeTasks(userId, taskId, repositionIndex);
 
