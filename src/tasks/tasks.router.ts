@@ -73,6 +73,12 @@ tasksRouter.post("/", validateAccessToken, async (req: Request, res: Response) =
         errors: error.validationErrors
       });
     }
+    if (error.message === 'DUPLICATE_TASK' || error.statusCode === 409) {
+      return res.status(409).json({
+        error: "DUPLICATE_TASK",
+        message: error.message || "A task with this name and due date already exists"
+      });
+    }
     res.status(500).json({ message: "Error creating task" });
   }
 });

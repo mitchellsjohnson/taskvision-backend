@@ -41,6 +41,52 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     throw error;
   }
 
+  // Check for duplicate tasks (same title, same/no due date)
+  const duplicateCheckParams = {
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    FilterExpression: "LOWER(title) = :title AND EntityType = :entityType AND #status <> :completedStatus AND #status <> :canceledStatus",
+    ExpressionAttributeValues: {
+      ":pk": `USER#${userId}`,
+      ":sk": "TASK#",
+      ":title": taskData.title.trim().toLowerCase(),
+      ":entityType": "Task",
+      ":completedStatus": "Completed",
+      ":canceledStatus": "Canceled"
+    },
+    ExpressionAttributeNames: {
+      "#status": "status"
+    }
+  };
+
+  try {
+    const duplicateCheck = await docClient.send(new QueryCommand(duplicateCheckParams));
+    const existingTasks = duplicateCheck.Items || [];
+
+    // Check if any existing task has the same title and due date combination
+    for (const existingTask of existingTasks) {
+      const existingDueDate = existingTask.dueDate || null;
+      const newDueDate = taskData.dueDate || null;
+
+      // Duplicate if:
+      // 1. Both have no due date (both are null)
+      // 2. Both have the same due date
+      if (existingDueDate === newDueDate) {
+        const error = new Error('DUPLICATE_TASK');
+        (error as any).statusCode = 409;
+        (error as any).message = 'A task with this name and due date already exists';
+        throw error;
+      }
+    }
+  } catch (error: any) {
+    // Re-throw duplicate errors
+    if (error.message === 'DUPLICATE_TASK') {
+      throw error;
+    }
+    // Log other errors but don't fail the creation
+    console.error("Error checking for duplicates:", error);
+  }
+
   const taskId = ulid();
   const now = new Date().toISOString();
 
