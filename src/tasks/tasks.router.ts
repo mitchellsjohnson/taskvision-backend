@@ -8,6 +8,7 @@ import {
   getProductivityMetrics,
   getRecentActivity,
   getUpcomingTasks,
+  reprioritizeTasks,
 } from "../db/task-operations";
 import { Task } from '../types';
 
@@ -199,5 +200,27 @@ tasksRouter.get("/upcoming", validateAccessToken, async (req: Request, res: Resp
   } catch (error) {
     console.error("Error fetching upcoming tasks:", error);
     res.status(500).json({ message: "Error fetching upcoming tasks" });
+  }
+});
+
+// POST /api/tasks/fix-priorities - Admin endpoint to fix duplicate priorities
+tasksRouter.post("/fix-priorities", validateAccessToken, async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+
+    console.log(`[fix-priorities] Starting priority fix for user: ${userId}`);
+
+    // Call reprioritizeTasks without parameters to recalculate all priorities
+    await reprioritizeTasks(userId);
+
+    console.log(`[fix-priorities] Successfully fixed priorities for user: ${userId}`);
+
+    res.status(200).json({
+      message: "Priorities have been successfully recalculated",
+      userId: userId
+    });
+  } catch (error) {
+    console.error("Error fixing priorities:", error);
+    res.status(500).json({ message: "Error fixing task priorities" });
   }
 }); 
