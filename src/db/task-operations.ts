@@ -302,6 +302,74 @@ export const getTask = async (userId: string, taskId: string) => {
   }
 }
 
+export const fixAllPriorities = async (userId: string) => {
+  console.log('[fixAllPriorities] Starting priority fix for user:', userId);
+
+  // Use a strongly consistent read to ensure we get the latest data
+  const allTasksResult = await docClient.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
+    ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
+    ConsistentRead: true,
+  }));
+
+  let allTasks = allTasksResult.Items || [];
+  console.log('[fixAllPriorities] Found tasks:', allTasks.length);
+
+  // Filter out completed and canceled tasks
+  let activeTasks = allTasks.filter(t => t.status !== 'Completed' && t.status !== 'Canceled');
+  console.log('[fixAllPriorities] Active tasks:', activeTasks.length);
+
+  // Sort by creation date to establish a stable order
+  activeTasks.sort((a, b) => {
+    if (a.isMIT && !b.isMIT) return -1;  // MIT before LIT
+    if (!a.isMIT && b.isMIT) return 1;   // LIT after MIT
+    // Within each group, sort by creation date (oldest first)
+    return (a.creationDate || '').localeCompare(b.creationDate || '');
+  });
+
+  // Separate into MIT and LIT lists
+  const mitTasks = activeTasks.filter(t => t.isMIT);
+  const litTasks = activeTasks.filter(t => !t.isMIT);
+
+  console.log('[fixAllPriorities] MIT tasks:', mitTasks.length, 'LIT tasks:', litTasks.length);
+
+  // Update MIT priorities (1-based: 1, 2, 3)
+  const mitPromises = mitTasks.map((task, index) => {
+    const newPriority = index + 1;
+    console.log(`[fixAllPriorities] MIT task ${task.TaskId.substring(0, 8)} -> priority ${newPriority}`);
+    return docClient.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+      UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+      ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+      ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+    }));
+  });
+
+  // Update LIT priorities (1-based: 1, 2, 3, 4...)
+  const litPromises = litTasks.map((task, index) => {
+    const newPriority = index + 1;
+    console.log(`[fixAllPriorities] LIT task ${task.TaskId.substring(0, 8)} -> priority ${newPriority}`);
+    return docClient.send(new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+      UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+      ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+      ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
+    }));
+  });
+
+  await Promise.all([...mitPromises, ...litPromises]);
+  console.log('[fixAllPriorities] Completed. Updated', mitPromises.length + litPromises.length, 'tasks');
+
+  return {
+    mitCount: mitTasks.length,
+    litCount: litTasks.length,
+    totalFixed: mitPromises.length + litPromises.length
+  };
+};
+
 export const reprioritizeTasks = async (userId: string, movedTaskId?: string, newPosition?: number) => {
   console.log('[reprioritizeTasks] Called with:', { userId, movedTaskId, newPosition });
 

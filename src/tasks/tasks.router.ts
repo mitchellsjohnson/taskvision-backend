@@ -9,6 +9,7 @@ import {
   getRecentActivity,
   getUpcomingTasks,
   reprioritizeTasks,
+  fixAllPriorities,
 } from "../db/task-operations";
 import { Task } from '../types';
 
@@ -210,14 +211,17 @@ tasksRouter.post("/fix-priorities", validateAccessToken, async (req: Request, re
 
     console.log(`[fix-priorities] Starting priority fix for user: ${userId}`);
 
-    // Call reprioritizeTasks without parameters to recalculate all priorities
-    await reprioritizeTasks(userId);
+    // Call fixAllPriorities to recalculate all priorities from scratch
+    const result = await fixAllPriorities(userId);
 
-    console.log(`[fix-priorities] Successfully fixed priorities for user: ${userId}`);
+    console.log(`[fix-priorities] Successfully fixed priorities for user: ${userId}`, result);
 
     res.status(200).json({
       message: "Priorities have been successfully recalculated",
-      userId: userId
+      userId: userId,
+      mitCount: result.mitCount,
+      litCount: result.litCount,
+      totalFixed: result.totalFixed
     });
   } catch (error) {
     console.error("Error fixing priorities:", error);
