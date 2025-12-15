@@ -33,6 +33,9 @@ interface TaskInput {
 }
 
 export const createTask = async (userId: string, taskData: TaskInput) => {
+  const startTime = Date.now();
+  console.log(`[createTask] Starting task creation for user ${userId.substring(0, 12)}...`);
+  
   // Validate task data
   const validation = validateTaskData(taskData);
   if (!validation.isValid) {
@@ -42,14 +45,14 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
   }
 
   // Check for duplicate tasks (same title, same/no due date)
+  // Note: DynamoDB doesn't support LOWER() function, so we fetch and compare in application code
   const duplicateCheckParams = {
     TableName: TABLE_NAME,
     KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
-    FilterExpression: "LOWER(title) = :title AND EntityType = :entityType AND #status <> :completedStatus AND #status <> :canceledStatus",
+    FilterExpression: "EntityType = :entityType AND #status <> :completedStatus AND #status <> :canceledStatus",
     ExpressionAttributeValues: {
       ":pk": `USER#${userId}`,
       ":sk": "TASK#",
-      ":title": taskData.title.trim().toLowerCase(),
       ":entityType": "Task",
       ":completedStatus": "Completed",
       ":canceledStatus": "Canceled"
@@ -64,23 +67,25 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
     const existingTasks = duplicateCheck.Items || [];
 
     // Check if any existing task has the same title and due date combination
+    // Do case-insensitive comparison in application code since DynamoDB doesn't support LOWER()
+    const normalizedNewTitle = taskData.title.trim().toLowerCase();
+    
     for (const existingTask of existingTasks) {
+      const normalizedExistingTitle = (existingTask.title || '').trim().toLowerCase();
       const existingDueDate = existingTask.dueDate || null;
       const newDueDate = taskData.dueDate || null;
 
-      // Duplicate if:
-      // 1. Both have no due date (both are null)
-      // 2. Both have the same due date
-      if (existingDueDate === newDueDate) {
-        const error = new Error('DUPLICATE_TASK');
+      // Duplicate if titles match (case-insensitive) AND due dates match
+      if (normalizedExistingTitle === normalizedNewTitle && existingDueDate === newDueDate) {
+        const error = new Error('A task with this name and due date already exists');
         (error as any).statusCode = 409;
-        (error as any).message = 'A task with this name and due date already exists';
+        (error as any).code = 'DUPLICATE_TASK';
         throw error;
       }
     }
   } catch (error: any) {
     // Re-throw duplicate errors
-    if (error.message === 'DUPLICATE_TASK') {
+    if (error.statusCode === 409 || error.code === 'DUPLICATE_TASK') {
       throw error;
     }
     // Log other errors but don't fail the creation
@@ -123,8 +128,8 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
   try {
     await docClient.send(command);
 
-    // Log audit event for task creation
-    await logTaskAuditEvent(userId, {
+    // Log audit event for task creation (fire and forget - don't await)
+    logTaskAuditEvent(userId, {
       taskId,
       taskTitle: task.title,
       action: 'created',
@@ -135,45 +140,27 @@ export const createTask = async (userId: string, taskData: TaskInput) => {
         dueDate: task.dueDate
       },
       timestamp: now
-    });
+    }).catch(err => console.error('Audit log failed:', err));
 
-    // Trigger reprioritization to handle the new task's position
-    // If insertPosition is provided, use that; otherwise use priority-based calculation
-    let repositionIndex: number;
+    // OPTIMIZATION: Only reprioritize if explicitly requested via insertPosition
+    // For normal task creation, let the UI handle ordering or do batch reprioritization later
     if (taskData.insertPosition !== undefined) {
-      repositionIndex = taskData.insertPosition;
-    } else {
-      // For LIT tasks, we need to account for existing MIT tasks
-      // since reprioritizeTasks sorts MIT first, then LIT
-      if (!task.isMIT) {
-        // Query existing tasks to count MITs
-        const existingTasksResult = await docClient.send(new QueryCommand({
-          TableName: TABLE_NAME,
-          KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
-          ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
-          ProjectionExpression: "isMIT, #st",
-          ExpressionAttributeNames: { "#st": "status" },
-          ConsistentRead: true,
-        }));
-
-        const existingTasks = existingTasksResult.Items || [];
-        const mitCount = existingTasks.filter(t => t.isMIT && t.status !== 'Completed' && t.status !== 'Canceled').length;
-
-        // Position = number of MITs + (LIT priority - 1)
-        repositionIndex = mitCount + (taskData.priority || 1) - 1;
-      } else {
-        // For MIT tasks, use priority directly (0-indexed)
-        repositionIndex = (taskData.priority || 1) - 1;
-      }
+      // Only reprioritize when position is explicitly specified (e.g., drag and drop)
+      await reprioritizeTasks(userId, taskId, taskData.insertPosition);
+      
+      // Fetch the task again to get the updated priority after reprioritization
+      const updatedTask = await getTask(userId, taskId);
+      return updatedTask || task;
     }
-
-    await reprioritizeTasks(userId, taskId, repositionIndex);
-
-    // Fetch the task again to get the updated priority after reprioritization
-    const updatedTask = await getTask(userId, taskId);
-    return updatedTask || task; // Fallback to original task if fetch fails
+    
+    // For new tasks without explicit position, return immediately
+    // Priority is already set correctly (1 for new MIT/LIT tasks)
+    const duration = Date.now() - startTime;
+    console.log(`[createTask] ✓ Task created successfully in ${duration}ms (taskId: ${taskId.substring(0, 12)}...)`);
+    return task;
   } catch (error) {
-    console.error("Error creating task:", error);
+    const duration = Date.now() - startTime;
+    console.error(`[createTask] ✗ Failed after ${duration}ms:`, error);
     throw new Error("Could not create task.");
   }
 };
@@ -371,14 +358,16 @@ export const fixAllPriorities = async (userId: string) => {
 };
 
 export const reprioritizeTasks = async (userId: string, movedTaskId?: string, newPosition?: number) => {
-  console.log('[reprioritizeTasks] Called with:', { userId, movedTaskId, newPosition });
+  const startTime = Date.now();
+  console.log('[reprioritizeTasks] Called with:', { userId: userId.substring(0, 12), movedTaskId: movedTaskId?.substring(0, 12), newPosition });
 
-  // Use a strongly consistent read to ensure we get the latest data
+  // OPTIMIZATION: Use eventually consistent reads for better performance
+  // ConsistentRead doubles the latency and cost - only use when absolutely necessary
   const allTasksResult = await docClient.send(new QueryCommand({
     TableName: TABLE_NAME,
     KeyConditionExpression: "PK = :pk and begins_with(SK, :sk)",
     ExpressionAttributeValues: { ":pk": `USER#${userId}`, ":sk": "TASK#" },
-    ConsistentRead: true,
+    // Removed ConsistentRead: true for better performance
   }));
 
   let allTasks = allTasksResult.Items || [];
@@ -415,47 +404,58 @@ export const reprioritizeTasks = async (userId: string, movedTaskId?: string, ne
   console.log('[reprioritizeTasks] MIT tasks:', mitTasks.length, 'LIT tasks:', litTasks.length);
   console.log('[reprioritizeTasks] MIT task priorities before:', mitTasks.map(t => ({ id: t.TaskId.substring(0, 8), priority: t.priority, priorityType: typeof t.priority, title: t.title })));
 
+  // OPTIMIZATION: Reduce logging noise - only log when actually updating
+  const now = new Date().toISOString();
+  const updates: Promise<any>[] = [];
+
   // Update MIT priorities (1-based: 1, 2, 3)
-  const mitPromises = mitTasks.map((task, index) => {
-    const newPriority = index + 1; // 1-based priority within MIT
-    const currentPriority = Number(task.priority); // Ensure it's a number
-    console.log(`[reprioritizeTasks] MIT task ${task.TaskId.substring(0, 8)}: ${currentPriority} (${typeof task.priority}) -> ${newPriority} | needsUpdate: ${currentPriority !== newPriority}`);
+  mitTasks.forEach((task, index) => {
+    const newPriority = index + 1;
+    const currentPriority = Number(task.priority);
     if (currentPriority !== newPriority) {
-      console.log(`[reprioritizeTasks] UPDATING MIT task ${task.TaskId.substring(0, 8)} priority from ${currentPriority} to ${newPriority}`);
-      return docClient.send(new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
-        UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
-        ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
-        ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
-      }));
+      updates.push(
+        docClient.send(new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+          UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+          ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+          ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': now },
+        }))
+      );
     }
-    return Promise.resolve();
   });
 
   // Update LIT priorities (1-based: 1, 2, 3, 4...)
-  const litPromises = litTasks.map((task, index) => {
-    const newPriority = index + 1; // 1-based priority within LIT
-    const currentPriority = Number(task.priority); // Ensure it's a number
-    console.log(`[reprioritizeTasks] LIT task ${task.TaskId.substring(0, 8)}: ${currentPriority} (${typeof task.priority}) -> ${newPriority} | needsUpdate: ${currentPriority !== newPriority}`);
+  litTasks.forEach((task, index) => {
+    const newPriority = index + 1;
+    const currentPriority = Number(task.priority);
     if (currentPriority !== newPriority) {
-      console.log(`[reprioritizeTasks] UPDATING LIT task ${task.TaskId.substring(0, 8)} priority from ${currentPriority} to ${newPriority}`);
-      return docClient.send(new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
-        UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
-        ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
-        ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': new Date().toISOString() },
-      }));
+      updates.push(
+        docClient.send(new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `USER#${userId}`, SK: `TASK#${task.TaskId}` },
+          UpdateExpression: 'SET #priority = :priority, #modifiedDate = :modifiedDate',
+          ExpressionAttributeNames: { '#priority': 'priority', '#modifiedDate': 'modifiedDate' },
+          ExpressionAttributeValues: { ':priority': newPriority, ':modifiedDate': now },
+        }))
+      );
     }
-    return Promise.resolve();
   });
 
-  await Promise.all([...mitPromises, ...litPromises]);
-  console.log('[reprioritizeTasks] Completed. Updated', mitPromises.length + litPromises.length, 'tasks');
+  if (updates.length > 0) {
+    await Promise.all(updates);
+    const duration = Date.now() - startTime;
+    console.log(`[reprioritizeTasks] ✓ Completed in ${duration}ms. Updated ${updates.length} of ${mitTasks.length + litTasks.length} tasks`);
+  } else {
+    const duration = Date.now() - startTime;
+    console.log(`[reprioritizeTasks] ✓ No updates needed (${duration}ms) - priorities already correct`);
+  }
 };
 
 export async function updateTask(userId: string, taskId: string, updateData: Partial<Task & { position?: number }>): Promise<Task | null> {
+  const startTime = Date.now();
+  console.log(`[updateTask] Starting update for task ${taskId.substring(0, 12)}...`);
+  
   // Validate task data if title or description are being updated
   if (updateData.title || updateData.description) {
     const validation = validateTaskData({
@@ -496,18 +496,10 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
     }
   }
 
-  // After the main update, if isMIT was changed, trigger reprioritization
-  // BUT only if priority wasn't also explicitly set (which indicates manual reordering)
-  if (updateData.isMIT !== undefined && updateData.priority === undefined) {
-    // Use a lock to prevent concurrent reprioritization for the same user
-    if (!userReprioritizationLocks.has(userId)) {
-      const reprioritizePromise = reprioritizeTasks(userId).finally(() => {
-        userReprioritizationLocks.delete(userId);
-      });
-      userReprioritizationLocks.set(userId, reprioritizePromise);
-    }
-    await userReprioritizationLocks.get(userId);
-  }
+  // OPTIMIZATION: Removed automatic reprioritization on isMIT change
+  // Reprioritization is expensive and should only happen when explicitly needed
+  // The UI can handle reordering, or users can manually fix priorities via the fix-priorities endpoint
+  // If you need automatic reprioritization on MIT changes, call the fix-priorities endpoint separately
 
   const updateExpressionParts: string[] = [];
   const expressionAttributeNames: { [key: string]: string } = {};
@@ -582,9 +574,12 @@ export async function updateTask(userId: string, taskId: string, updateData: Par
       });
     }
 
+    const duration = Date.now() - startTime;
+    console.log(`[updateTask] ✓ Task updated successfully in ${duration}ms`);
     return updatedTask;
   } catch (error) {
-    console.error("Error updating task:", error);
+    const duration = Date.now() - startTime;
+    console.error(`[updateTask] ✗ Failed after ${duration}ms:`, error);
     throw new Error("Could not update task.");
   }
 }

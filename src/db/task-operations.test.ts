@@ -52,9 +52,9 @@ describe("Task Operations", () => {
       };
 
       mockSend
-        .mockResolvedValueOnce({}) // PutCommand for createTask
-        .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
-        .mockResolvedValue({}); // UpdateCommand for reprioritizeTasks
+        .mockResolvedValueOnce({ Items: [] }) // QueryCommand for duplicate check
+        .mockResolvedValueOnce({}); // PutCommand for createTask
+      // OPTIMIZED: No longer calls reprioritizeTasks unless insertPosition is provided
 
       const task = await createTask("test-user-id", testTask);
 
@@ -69,7 +69,7 @@ describe("Task Operations", () => {
       expect(task.UserId).toBe("test-user-id");
     });
 
-    it("should create a new task", async () => {
+    it("should create a new task without reprioritizing", async () => {
       const testTask = {
         title: "Test Task",
         description: "Test Description",
@@ -77,9 +77,8 @@ describe("Task Operations", () => {
       };
 
       mockSend
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({ Items: [] })
-        .mockResolvedValue({});
+        .mockResolvedValueOnce({ Items: [] }) // Duplicate check
+        .mockResolvedValueOnce({}); // PutCommand
 
       const task = await createTask("test-user-id", testTask);
 
@@ -91,6 +90,30 @@ describe("Task Operations", () => {
       expect(task.modifiedDate).toBeDefined();
       expect(task.completedDate).toBeNull();
       expect(task.UserId).toBe("test-user-id");
+      
+      // Verify only 2 DynamoDB calls (duplicate check + create), no reprioritization
+      expect(mockSend).toHaveBeenCalledTimes(2);
+    });
+
+    it("should reprioritize when insertPosition is provided", async () => {
+      const testTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Open" as const,
+        insertPosition: 2,
+      };
+
+      mockSend
+        .mockResolvedValueOnce({ Items: [] }) // Duplicate check
+        .mockResolvedValueOnce({}) // PutCommand
+        .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
+        .mockResolvedValueOnce({ Item: { TaskId: 'test', priority: 2 } }); // GetCommand for updated task
+
+      const task = await createTask("test-user-id", testTask);
+
+      expect(task).toBeDefined();
+      // Should have called reprioritizeTasks
+      expect(mockSend).toHaveBeenCalledTimes(4);
     });
 
     it("should set completedDate when status is Completed", async () => {
@@ -101,14 +124,34 @@ describe("Task Operations", () => {
       };
 
       mockSend
-        .mockResolvedValueOnce({})
         .mockResolvedValueOnce({ Items: [] })
-        .mockResolvedValue({});
+        .mockResolvedValueOnce({});
 
       const task = await createTask("test-user-id", testTask);
 
       expect(task.completedDate).toBeDefined();
       expect(task.status).toBe("Completed");
+    });
+    
+    it("should detect duplicate tasks (case-insensitive)", async () => {
+      const testTask = {
+        title: "Test Task",
+        description: "Test Description",
+        status: "Open" as const,
+        // No dueDate - will be compared as null
+      };
+      
+      const existingTasks = [
+        { 
+          title: "test task",  // Different case  
+          dueDate: undefined,  // Same as no dueDate
+          status: "Open" 
+        }
+      ];
+
+      mockSend.mockResolvedValueOnce({ Items: existingTasks }); // Duplicate check query
+
+      await expect(createTask("test-user-id", testTask)).rejects.toThrow("A task with this name and due date already exists");
     });
   });
 
@@ -138,9 +181,9 @@ describe("Task Operations", () => {
   });
 
   describe("updateTask", () => {
-    it("should call reprioritizeTasks when priority is changed", async () => {
-      const updateData: Partial<Task> = {
-        priority: 2,
+    it("should call reprioritizeTasks when position is changed", async () => {
+      const updateData: Partial<Task & { position?: number }> = {
+        position: 2,
       };
       const mockCurrentTask: Task = {
         TaskId: "task-1",
@@ -163,21 +206,16 @@ describe("Task Operations", () => {
       };
       
       mockSend
-        .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
-        .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
-        .mockResolvedValueOnce({}) // logTaskAuditEvent call
         .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
-        .mockResolvedValueOnce({}) // UpdateCommand for reprioritizeTasks (if any)
-        .mockResolvedValueOnce({}) // Additional UpdateCommand for reprioritizeTasks (if any)
-        .mockResolvedValueOnce({}); // Additional UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({ Item: mockReturnedTask }); // GetCommand after reprioritization
 
       await updateTask("test-user-id", "task-1", updateData);
 
-      // We expect getTasksForUser to be called inside reprioritizeTasks
-      expect(mockSend).toHaveBeenCalled();
+      // Should have called reprioritizeTasks (Query + Get)
+      expect(mockSend).toHaveBeenCalledTimes(2);
     });
 
-    it("should call reprioritizeTasks when isMIT is changed", async () => {
+    it("should NOT auto-reprioritize when isMIT is changed (optimization)", async () => {
       const updateData: Partial<Task> = {
         isMIT: true,
       };
@@ -203,17 +241,14 @@ describe("Task Operations", () => {
 
       mockSend
         .mockResolvedValueOnce({ Item: mockCurrentTask }) // getTask call
-        .mockResolvedValueOnce({ Attributes: mockReturnedTask }) // UpdateCommand
-        .mockResolvedValueOnce({}) // logTaskAuditEvent call
-        .mockResolvedValueOnce({ Items: [] }) // QueryCommand for reprioritizeTasks
-        .mockResolvedValueOnce({}) // UpdateCommand for reprioritizeTasks (if any)
-        .mockResolvedValueOnce({}) // Additional UpdateCommand for reprioritizeTasks (if any)
-        .mockResolvedValueOnce({}); // Additional UpdateCommand for reprioritizeTasks (if any)
+        .mockResolvedValueOnce({ Attributes: mockReturnedTask }); // UpdateCommand
+      // OPTIMIZED: No longer auto-reprioritizes on isMIT change
 
-      await updateTask("test-user-id", "task-1", updateData);
+      const result = await updateTask("test-user-id", "task-1", updateData);
 
-      // We expect getTasksForUser to be called inside reprioritizeTasks
-      expect(mockSend).toHaveBeenCalled();
+      expect(result?.isMIT).toBe(true);
+      // Should only have 2 calls (getTask + update), no reprioritization
+      expect(mockSend).toHaveBeenCalledTimes(2);
     });
 
     it("should update a task", async () => {

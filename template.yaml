@@ -5,9 +5,9 @@ Description: TaskVision backend - deploys Lambda + API Gateway with proper CORS 
 # Deploying fresh stack after cleanup
 Globals:
   Function:
-    Timeout: 10
+    Timeout: 30
     Runtime: nodejs18.x
-    MemorySize: 128
+    MemorySize: 256
     Architectures:
       - x86_64
 
